@@ -1,6 +1,6 @@
 # Printable Map from OSMAnd
 
-This is a tool to generate a printable topographic map by using screenshots from OSMAnd. The map uses the UTM grid and has declination information. It's to be used with a compass or a GPS device with UTM coordinates.
+This is a tool to generate a printable topographic map by using screenshots from OSMAnd (https://osmand.net). The map uses the UTM grid and has declination information. It's to be used with a compass or a GPS device with UTM coordinates.
 
 ## Installation
 

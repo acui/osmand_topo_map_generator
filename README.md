@@ -20,12 +20,15 @@ Tested on Python 3.11
 First, run:
 
 ```shell
-python topo_map_generator.py [-h] [--paper_size A4] [--orientation {portrait,landscape}] NAME ZONE_NUMBER ZONE_LETTER EASTING NORTHING SCALE MAP_ROOT
+python topo_map_generator.py --paper_size A4 --orientation portrait 富士山 54S 295102 3917080 1:25000 topomaps/富士山
 ```
 
-It will generate a GPX file to the `MAP_ROOT`.
+It will generate a GPX file to the `topomaps/富士山`.
 
-Then import the `.gpx` file into OSMAnd and take screenshots that cover the whole region. The screenshots should be taken by using the arrow keys to follow a zigzag pattern. Copy the screenshots to the `MAP_ROOT`. The program will merge all the screenshots and find 4 corners of the region. You could correct it and let the program generate the final map for you.
+Then import the `富士山.gpx` file into OSMAnd and take screenshots that overlapping and cover the whole region. The screenshots should be taken by using the arrow keys to follow a zigzag pattern.
+![Example](images/zigzag.png)
+
+Copy the screenshots to the `topomaps/富士山`. The program will merge all the screenshots and find 4 corners of the region. You could correct it and let the program generate the final map for you.
 
 Example result:
 

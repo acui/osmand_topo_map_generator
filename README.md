@@ -1,6 +1,6 @@
-# Printable Map from OSMAnd
+# Printable Map from OsmAnd
 
-This is a tool to generate a printable topographic map by using screenshots from OSMAnd (https://osmand.net). The map uses the UTM grid and has declination information. It's to be used with a compass or a GPS device with UTM coordinates.
+This is a tool to generate a printable topographic map by using screenshots from OsmAnd (https://osmand.net). The map uses the UTM grid and has declination information. It's to be used with a compass or a GPS device with UTM coordinates.
 
 ## Installation
 
@@ -11,9 +11,9 @@ Tested on Python 3.11
   ```shell
   pip install -r requirements.txt
   ```
-- Install Bluestacks5(https://www.bluestacks.com/bluestacks-5.html) and have OSMAnd+ installed
+- Install Bluestacks5(https://www.bluestacks.com/bluestacks-5.html) and have OsmAnd+ installed
 - The Bluestacks VM should have a resolution of 3840x2160 and DPI of 320
-- Optional: Import the `profiles/Hiking Map.osf` to OSMAnd
+- Optional: Import the `profiles/Hiking Map.osf` to OsmAnd
 
 ## Usage
 
@@ -25,7 +25,7 @@ python topo_map_generator.py --paper_size A4 --orientation portrait 富士山 54
 
 It will generate a GPX file to the `topomaps/富士山`.
 
-Then import the `富士山.gpx` file into OSMAnd and take screenshots that overlapping and cover the whole region. The screenshots should be taken by using the arrow keys to follow a zigzag pattern.
+Then import the `富士山.gpx` file into OsmAnd and take screenshots that overlapping and cover the whole region. The screenshots should be taken by using the arrow keys to follow a zigzag pattern.
 ![Example](images/zigzag.png)
 
 Copy the screenshots to the `topomaps/富士山`. The program will merge all the screenshots and find 4 corners of the region. You could correct it and let the program generate the final map for you.

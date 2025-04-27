@@ -811,7 +811,7 @@ class TopoMap:
                 stroke_width=0.1,
                 font_family=FONT_FAMILY,
                 font_size= font_size,
-                text=f"Map data is from OsmAnd Maps & Navigation https://osmand.net/",
+                text=f"Map is provided by OsmAnd Maps & Navigation https://osmand.net/",
                 x=0,
                 y=scale_bar_unit_y + font_size * 6,
                 text_anchor="start"

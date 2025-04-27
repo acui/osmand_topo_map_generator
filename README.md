@@ -32,7 +32,7 @@ Copy the screenshots to the `topomaps/富士山`. The program will merge all the
 
 Example result:
 
-![Example](images/example.png)
+![Example](images/example.jpg)
 
 ## Known Issues
 

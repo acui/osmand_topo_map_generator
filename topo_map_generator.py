@@ -216,7 +216,7 @@ class TopoMap:
         meta_time.text = self.create_time.isoformat(timespec="milliseconds" if self.create_time.microsecond else "seconds").replace("+00:00", "Z")
         metadata.append(meta_time)
         tree.append(metadata)
-        points = [self.boundingbox.top_left.to_latlon(), self.boundingbox.top_right.to_latlon(), self.boundingbox.bottom_right.to_latlon(), self.boundingbox.bottom_left.to_latlon(), self.boundingbox.top_left.to_latlon()]
+        points = [self.gridBoundingBox.top_left.to_latlon(), self.gridBoundingBox.top_right.to_latlon(), self.gridBoundingBox.bottom_right.to_latlon(), self.gridBoundingBox.bottom_left.to_latlon(), self.gridBoundingBox.top_left.to_latlon()]
         track = etree.Element("trk")
         trk_name = etree.Element("name")
         trk_name.text = f"Map Boundaries of {self.label}"

@@ -1,0 +1,11 @@
+numpy
+opencv-python
+Pillow
+pydantic>=2
+pydantic-settings
+pymap3d
+pygeomag
+svg.py
+tqdm
+lxml
+utm

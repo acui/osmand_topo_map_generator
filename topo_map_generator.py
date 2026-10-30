@@ -201,7 +201,11 @@ class TopoMap:
         self.tn2gn = math.atan2(enu_top_center[0], enu_top_center[1])
         self.create_time = datetime.datetime.now()
         decimal_year = pygeomag.calculate_decimal_year(self.create_time)
-        geo_mag = pygeomag.GeoMag(coefficients_file=str(WMM_COEFFICIENTS_FILE.relative_to(Path().absolute())), high_resolution=True)
+        wmm_file = WMM_COEFFICIENTS_FILE
+        if not wmm_file.exists():
+            # fall back to the coefficients bundled with pygeomag
+            wmm_file = Path(pygeomag.__file__).parent / "wmm" / "WMMHR_2025.COF"
+        geo_mag = pygeomag.GeoMag(coefficients_file=str(wmm_file), high_resolution=True)
         result = geo_mag.calculate(map_center_lat, map_center_lon, 0, decimal_year)
         self.declination = result.d
         self.scale = scale

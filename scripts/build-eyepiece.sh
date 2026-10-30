@@ -16,7 +16,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # generator repo
-SRC="${NATIVE:-$ROOT/../osmand-native}"                    # osmand-native superproject
+SRC="${NATIVE:-$ROOT/osmand-native}"                       # native checkouts (submodules)
 BUILD="${BUILD_DIR:-$SRC/build}"
 JOBS="${JOBS:-$(nproc)}"
 TARGET="${TARGET:-eyepiece}"
@@ -29,7 +29,7 @@ fi
 # --- apply the patch overlay onto the official checkouts (idempotent) --------
 apply_patches() {
     local repo="$1" name="$2"
-    local patches="$SRC/patches/$name"
+    local patches="$ROOT/patches/$name"
     [ -d "$patches" ] || return 0
     cd "$repo"
     if git apply --check --reverse "$patches"/*.patch 2>/dev/null; then

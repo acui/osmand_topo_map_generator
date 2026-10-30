@@ -1205,10 +1205,17 @@ def main():
             import os
             import subprocess
 
-            eyepiece = args.eyepiece or Path.home() / \
-                "projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece"
+            if args.eyepiece:
+                eyepiece = args.eyepiece
+            else:
+                # prefer the in-tree build, fall back to the legacy home layout
+                _candidates = [
+                    Path(__file__).parent / "osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece",
+                    Path.home() / "projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece",
+                ]
+                eyepiece = next((p for p in _candidates if p.exists()), _candidates[0])
             if not eyepiece.exists():
-                raise SystemExit(f"EyePiece binary not found: {eyepiece} (build OsmAnd-core first)")
+                raise SystemExit(f"EyePiece binary not found: {eyepiece} (run scripts/build-eyepiece.sh first)")
             obf_files = collect_obf_files(zoom=args.render_zoom)
             print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
 

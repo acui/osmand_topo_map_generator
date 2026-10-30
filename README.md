@@ -10,27 +10,31 @@ Three rendering modes are available:
 
 ## Repository layout
 
-This repository is the pipeline superproject; the patched OsmAnd core rides along as a submodule:
+This is the **single repo to clone**. The official OsmAnd projects are included
+as submodules at their **official upstream commits**; our print-rendering
+changes ride along as a patch series that the build script applies:
 
 ```
-.                       # this repo: generator CLI, styles, SVG poster builder
+.                       # clone this one repo
 ├── topo_map_generator.py   # CLI entry (modes: render / core / screenshots)
 ├── obf/ render/ schemas/   # Python OBF reader, reference renderer, UTM helpers
 ├── styles/                 # print render styles + hillshade palettes
-│   ├── hillshade_main.txt      # OsmAnd standard shade→RGBA ramp (gdaldem format)
-│   ├── hillshade_slope.txt     # slope→grayscale for the shade·slope blend
-│   └── ...
+├── patches/                # our modifications, as git-format-patch series
+│   ├── core/                   #   EyePiece georef export, hillshade, grids...
+│   ├── tools/                  #   headless build tweaks
+│   └── OsmAnd-resources/       #   DEPFILE fix
 ├── scripts/
-│   ├── build-eyepiece.sh   # build the EyePiece rasterizer (OsmAnd core)
+│   ├── build-eyepiece.sh   # apply patches + configure + build (idempotent)
 │   └── install.sh          # editable pip install + eyepiece onto PATH
-└── osmand-native/          # SUBMODULE superproject: OsmAnd core/tools/resources
-    ├── core/               #   osmandapp/OsmAnd-core   @ topo-map (patched)
-    ├── tools/              #   osmandapp/OsmAnd-tools  @ topo-map
-    ├── OsmAnd-resources/   #   osmandapp/OsmAnd-resources @ topo-map
-    └── core-legacy/        #   osmandapp/OsmAnd-core-legacy
+└── osmand-native/          # official sources, as submodules
+    ├── CMakeLists.txt          # superbuild configuration (headless)
+    ├── core/                   # osmandapp/OsmAnd-core   @ f3b581fe (official)
+    ├── tools/                  # osmandapp/OsmAnd-tools  @ 2429969df (official)
+    ├── OsmAnd-resources/       # osmandapp/OsmAnd-resources @ e99f7f4e (official)
+    └── core-legacy/            # osmandapp/OsmAnd-core-legacy
 ```
 
-The `topo-map` branches carry the print-rendering patches:
+The `patches/` series covers:
 
 - raster georeference export (`<image>.georef.json`, true corner lat/lon)
 - hillshade: `-slopeColors` blend fix, OsmAnd standard palettes, no 2× vertical exaggeration
@@ -38,23 +42,27 @@ The `topo-map` branches carry the print-rendering patches:
 - 3D relief off unless `-elevation` (displacement warps the raster)
 - cold-start frame capture fix (idle hold instead of grabbing stub tiles)
 
+After changing anything under `osmand-native/`, re-export the series with
+`git format-patch <official-base>..HEAD -o patches/<repo>` in the submodule and
+commit the updated `patches/` here.
+
 ## Installation
 
 Tested on Python 3.11+ (Debian/Ubuntu).
 
 ```shell
-git clone --recurse-submodules <this repo> topo-map
-cd topo-map/generator
+git clone --recurse-submodules git@github.com:acui/osmand_topo_map_generator.git topo-map
+cd topo-map
 
 # 1. Python package (editable install; console entry point `topo-map-generator`)
 pip install -e .
 
-# 2. EyePiece rasterizer (one-time, ~10-20 min; needs build-essential cmake ninja
+# 2. EyePiece rasterizer (one-time build; needs build-essential cmake ninja
 #    libgdal-dev libgl1-mesa-dev libegl1-mesa-dev qtbase5-dev)
-../scripts/build-eyepiece.sh
+scripts/build-eyepiece.sh
 
 # 3. Put the binary on PATH (optional; the generator also finds it in the build tree)
-../scripts/install.sh
+scripts/install.sh
 ```
 
 Data note: OBF files / GeoTIFF heightmaps live outside the repo (default

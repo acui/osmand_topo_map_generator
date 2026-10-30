@@ -47,6 +47,14 @@ apply_patches() {
 apply_patches "$SRC/core" core
 apply_patches "$SRC/tools" tools
 apply_patches "$SRC/OsmAnd-resources" OsmAnd-resources
+
+# --- prepare external dependency sources (fresh clones have none) ------------
+for ext in "$SRC/core/externals"/*/; do
+    if [ -x "$ext/configure.sh" ]; then
+        echo ">> preparing external: $(basename "$ext")"
+        (cd "$ext" && bash configure.sh)
+    fi
+done
 cd "$SRC"
 
 # --- configure + build --------------------------------------------------------

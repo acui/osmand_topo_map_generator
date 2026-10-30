@@ -60,9 +60,15 @@ cd "$SRC"
 # --- configure + build --------------------------------------------------------
 if [ ! -f "$BUILD/CMakeCache.txt" ]; then
     echo ">> Configuring ($BUILD)"
+    # -O1 matches the known-good configuration; the font/style directories are
+    # required so the embedded resource bundle carries them (without them
+    # initializeRendering() fails at runtime).
     cmake -S "$SRC" -B "$BUILD" \
         -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS_RELEASE="-O1 -DNDEBUG" \
+        -DBUNDLE_FONTS_DIR="${FONTS_DIR:-$HOME/osmand-data/fonts}" \
+        -DBUNDLE_STYLES_DIR="$ROOT/styles" \
         "$@"
 else
     echo ">> Reusing existing configure in $BUILD"
@@ -71,6 +77,10 @@ fi
 
 echo ">> Building target: $TARGET ($JOBS jobs)"
 cmake --build "$BUILD" --target "$TARGET" -j"$JOBS"
+
+# EyePiece loads the shared resource bundle at runtime (non-null provider)
+echo ">> Building resource bundle"
+cmake --build "$BUILD" --target OsmAndCore_ResourcesBundle_shared -j"$JOBS"
 
 EYEPIECE="$BUILD/tools/cpp-tools/map-rasterizer/eyepiece"
 echo ">> EyePiece ready: $EYEPIECE"

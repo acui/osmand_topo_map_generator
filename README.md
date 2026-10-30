@@ -1,23 +1,64 @@
 # Printable Map from OsmAnd
 
-This is a tool to generate a printable topographic map from OsmAnd (https://osmand.net) data. The map uses the UTM grid and has declination information. It's to be used with a compass or a GPS device with UTM coordinates.
+Generate a printable 1:25000 topographic map poster (SVG/A4) from OsmAnd (https://osmand.net) data. The map uses the **true UTM grid** (rotated by the grid convergence, kilometre intersections matching GPS) and carries declination information for compass work.
 
-Two rendering modes are available:
+Three rendering modes are available:
 
 - **render** (default): offline rendering directly from OsmAnd `.obf` map data with a Python implementation of the OsmAnd rendering style (`render.xml`). No emulator or screenshots needed.
-- **core**: rendering through the **native OsmAnd engine** (osmandapp/OsmAnd-core, the same C++/Skia renderer the phone app uses), driven off-screen by the `EyePiece` tool. Pixel-identical to the app, including hillshade-ready styling. Requires a one-time build of `~/projects/osmand-native` (see below).
+- **core**: rendering through the **native OsmAnd engine** (`EyePiece`, the same C++/Skia renderer the phone app uses), driven off-screen. The engine exports a `.georef.json` (true lat/lon of the raster corners), and the SVG grid is drawn from that georeference — so grid intersections always land on the coordinates they label, independent of any renderer scale quirks.
 - **screenshots**: the legacy pipeline that stitches screenshots taken in OsmAnd (BlueStacks5 / Waydroid).
+
+## Repository layout
+
+This repository is the pipeline superproject; the patched OsmAnd core rides along as a submodule:
+
+```
+.                       # this repo: generator CLI, styles, SVG poster builder
+├── topo_map_generator.py   # CLI entry (modes: render / core / screenshots)
+├── obf/ render/ schemas/   # Python OBF reader, reference renderer, UTM helpers
+├── styles/                 # print render styles + hillshade palettes
+│   ├── hillshade_main.txt      # OsmAnd standard shade→RGBA ramp (gdaldem format)
+│   ├── hillshade_slope.txt     # slope→grayscale for the shade·slope blend
+│   └── ...
+├── scripts/
+│   ├── build-eyepiece.sh   # build the EyePiece rasterizer (OsmAnd core)
+│   └── install.sh          # editable pip install + eyepiece onto PATH
+└── osmand-native/          # SUBMODULE superproject: OsmAnd core/tools/resources
+    ├── core/               #   osmandapp/OsmAnd-core   @ topo-map (patched)
+    ├── tools/              #   osmandapp/OsmAnd-tools  @ topo-map
+    ├── OsmAnd-resources/   #   osmandapp/OsmAnd-resources @ topo-map
+    └── core-legacy/        #   osmandapp/OsmAnd-core-legacy
+```
+
+The `topo-map` branches carry the print-rendering patches:
+
+- raster georeference export (`<image>.georef.json`, true corner lat/lon)
+- hillshade: `-slopeColors` blend fix, OsmAnd standard palettes, no 2× vertical exaggeration
+- `-primaryGrid=utm|wgs84` overlay (self-check of grid placement)
+- 3D relief off unless `-elevation` (displacement warps the raster)
+- cold-start frame capture fix (idle hold instead of grabbing stub tiles)
 
 ## Installation
 
-Tested on Python 3.11
+Tested on Python 3.11+ (Debian/Ubuntu).
 
-- Put the WMM/WMMHR Coefficient file download from https://www.ncei.noaa.gov/products/world-magnetic-model-high-resolution to the `wmm` directory.
-- Install the requirements:
-  ```shell
-  pip install -r requirements.txt
-  ```
-- For the offline render mode, provide OsmAnd map data (`.obf` files) and a CJK-capable font (e.g. Noto Sans CJK, auto-detected).
+```shell
+git clone --recurse-submodules <this repo> topo-map
+cd topo-map/generator
+
+# 1. Python package (editable install; console entry point `topo-map-generator`)
+pip install -e .
+
+# 2. EyePiece rasterizer (one-time, ~10-20 min; needs build-essential cmake ninja
+#    libgdal-dev libgl1-mesa-dev libegl1-mesa-dev qtbase5-dev)
+../scripts/build-eyepiece.sh
+
+# 3. Put the binary on PATH (optional; the generator also finds it in the build tree)
+../scripts/install.sh
+```
+
+Data note: OBF files / GeoTIFF heightmaps live outside the repo (default
+`--obf_dir ~/osmand-data`, EyePiece expects `<obf_dir>/geotiff` for `--hillshade`).
 
 ### Getting the .obf data from Waydroid
 
@@ -42,55 +83,66 @@ sudo mkdir -p /mnt/wd && sudo mount -o ro,loop <image path> /mnt/wd
 sudo find /mnt/wd -name "*.obf"
 ```
 
-## Usage (offline render mode)
+## Usage (core mode, recommended)
 
 ```shell
-python topo_map_generator.py 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背
+topo-map-generator 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背 \
+    --mode core --hillshade True --hillshade_opacity 0.39 \
+    --dpi 1200 --orientation landscape \
+    --render_style ~/osmand-data/rendering/Hiking.render.xml
 ```
 
-### Native OsmAnd engine mode (`--mode core`)
+Result: `<name>.svg` (A4 poster, rotated UTM grid, km labels) plus `<name>_core.png`
+(the north-up georeferenced basemap) and `<name>_core.png.georef.json` (corner
+coordinates) in the output directory.
 
-Renders through the real OsmAnd C++ engine. One-time setup:
+### Resolution and supersampling
 
-```shell
-git clone --depth 1 https://github.com/osmandapp/OsmAnd-core.git ~/projects/osmand-native/core
-git clone --depth 1 https://github.com/osmandapp/OsmAnd-tools.git ~/projects/osmand-native/tools
-git clone --depth 1 https://github.com/osmandapp/OsmAnd-core-legacy.git ~/projects/osmand-native/core-legacy
-git clone --depth 1 https://github.com/osmandapp/OsmAnd-resources.git ~/projects/osmand-native/OsmAnd-resources
-sudo apt-get install -y qtbase5-dev libgl1-mesa-dev libegl1-mesa-dev
-cd ~/projects/osmand-native && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DPython3_EXECUTABLE=$(which python3) && ninja -C build eyepiece OsmAndCore_ResourcesBundle_shared
-```
+Physical sizes of roads/labels/icons are pinned by `--style_dpi` (default 300).
+`--dpi` is pure output resolution: `density = dpi/style_dpi` drives EyePiece's
+`-displayDensityFactor` (all style sizes scale up) and `-referenceTileSize`
+(vector tiles stay crisp), so a 1200 dpi print looks exactly like the 300 dpi
+proof, only sharper. The raster automatically re-renders until it covers the
+rotated grid frame.
 
-(If you already have the repos elsewhere, symlink them into `~/projects/osmand-native/{core,tools/core-legacy,...}` accordingly; a ready-made top-level `CMakeLists.txt` with the required legacy variables and GCC-15 fixes is part of this repository's tooling history.)
+### Hillshade
 
-Then simply add `--mode core`:
-
-```shell
-python topo_map_generator.py 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背 --mode core
-```
+`--hillshade True` enables the relief layer (OsmAnd standard palettes,
+`color-palette/hillshade_main_default.txt` converted in `styles/`).
+`--hillshade_opacity 0.39` is the OsmAnd default visibility. 3D relief
+(displacement) stays off — it warps the raster geometry.
 
 Notes:
-- Contour lines: for China, OsmAnd's Beijing-area contours ship inside `srtm/China_hebei_asia.srtm.obf` (the standalone `srtmf` file crashes the engine when mixed with map files — currently filtered by the bbox pre-check).
-- The engine occasionally crashes during shutdown, after the image has been written; the pipeline tolerates this.
+- Contour lines: for China, OsmAnd's Beijing-area contours ship inside
+  `srtm/China_hebei_asia.srtm.obf` (the standalone `srtmf` file crashes the
+  engine when mixed with map files — currently filtered by the bbox pre-check).
+- The engine occasionally crashes during shutdown, after the image has been
+  written; the pipeline tolerates this.
 
-Useful options:
+### Useful options
 
 - `--obf_dir ~/osmand-data` — directory with the `.obf` files (map files at the top level, contour files in `srtm/` or `srtmf/` sub-directories)
 - `--map_language {local,user,bilingual}` — label language; `--user_lang zh` selects the user language (default `zh`)
-- `--dpi 300` — basemap resolution (default 300)
-- `--contour_lines {disabled,16,15,14,13,12,11}` — minimum zoom to draw contour lines (default `13`)
+- `--contour_lines {disabled,16,15,14,13,12,11}` — minimum zoom to draw contour lines
 - `--contour_width {thin,medium,thick}`, `--contour_color_scheme brown` — contour appearance
-- `--render_style`, `--style_addon` — custom rendering styles (defaults: `styles/default.render.xml` + `styles/contourlines.addon.render.xml`, same files OsmAnd uses)
+- `--render_style`, `--style_addon` — custom rendering styles
 - `--stroke_scale`, `--text_scale` — global line width / label size multipliers
 - `--paper_size A4 --orientation portrait|landscape`
+- `--eyepiece PATH` — alternative EyePiece binary
 
-The result is `<name>.svg` plus the rendered basemap `<name>_render.png` in the output directory.
+## Usage (offline render mode)
+
+```shell
+topo-map-generator 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背
+```
+
+For the offline render mode, provide a CJK-capable font (e.g. Noto Sans CJK, auto-detected).
+The result is `<name>.svg` plus the rendered basemap `<name>_render.png`.
 
 ## Usage (legacy screenshot mode)
 
 ```shell
-python topo_map_generator.py --mode screenshots --paper_size A4 --orientation portrait 富士山 54S 295102 3917080 1:25000 topomaps/富士山
+topo-map-generator --mode screenshots --paper_size A4 --orientation portrait 富士山 54S 295102 3917080 1:25000 topomaps/富士山
 ```
 
 It will generate a GPX file to the `topomaps/富士山`.
@@ -111,4 +163,5 @@ Example result:
 
 ## License
 
-The source in this repository falls under an MIT license (see LICENSE)
+The source in this repository falls under an MIT license (see LICENSE).
+OsmAnd core/tools (the `osmand-native` submodule) keep their upstream licenses.

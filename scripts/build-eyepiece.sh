@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Build the EyePiece rasterizer (OsmAnd core + tools, topo-map patches).
+# Build the EyePiece rasterizer from UNMODIFIED official OsmAnd repos plus the
+# patch overlay in patches/ (applied automatically, idempotently).
+#
+# Layout:
+#   osmand-native/core, tools, OsmAnd-resources   official checkouts (submodules)
+#   patches/<repo>/*.patch                        this project's modifications
 #
 # Usage:
-#   scripts/build-eyepiece.sh              # configure + build
+#   scripts/build-eyepiece.sh
 #   JOBS=8 BUILD=/path/to/build scripts/build-eyepiece.sh
 #
 # Requirements (Debian/Ubuntu): build-essential cmake ninja-build git
-#   libgdal-dev libgl1-mesa-dev libglew-dev (core bundles the rest in
-#   osmand-native/core/externals)
+#   libgdal-dev libgl1-mesa-dev libegl1-mesa-dev qtbase5-dev
+#   (everything else is bundled in core/externals)
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/osmand-native"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # generator repo
+SRC="${NATIVE:-$ROOT/../osmand-native}"                    # osmand-native superproject
 BUILD="${BUILD_DIR:-$SRC/build}"
 JOBS="${JOBS:-$(nproc)}"
 TARGET="${TARGET:-eyepiece}"
@@ -21,15 +26,38 @@ if [ ! -d "$SRC/core" ]; then
     exit 1
 fi
 
+# --- apply the patch overlay onto the official checkouts (idempotent) --------
+apply_patches() {
+    local repo="$1" name="$2"
+    local patches="$SRC/patches/$name"
+    [ -d "$patches" ] || return 0
+    cd "$repo"
+    if git apply --check --reverse "$patches"/*.patch 2>/dev/null; then
+        echo ">> [$name] patches already applied"
+        return 0
+    fi
+    if git apply --check "$patches"/*.patch 2>/dev/null; then
+        echo ">> [$name] applying patch overlay"
+        git apply "$patches"/*.patch
+    else
+        echo ">> [$name] WARNING: patches neither applied nor applicable - skipping" >&2
+    fi
+}
+
+apply_patches "$SRC/core" core
+apply_patches "$SRC/tools" tools
+apply_patches "$SRC/OsmAnd-resources" OsmAnd-resources
+cd "$SRC"
+
+# --- configure + build --------------------------------------------------------
 if [ ! -f "$BUILD/CMakeCache.txt" ]; then
     echo ">> Configuring ($BUILD)"
     cmake -S "$SRC" -B "$BUILD" \
         -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DOPENGL_egl_LIBRARY=/usr/lib/x86_64-linux-gnu/libEGL.so \
         "$@"
 else
-    echo ">> Reusing existing configure in $BUILD (pass -D... args after --)"
+    echo ">> Reusing existing configure in $BUILD"
     cmake -S "$SRC" -B "$BUILD" "$@"
 fi
 

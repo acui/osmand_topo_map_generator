@@ -9,3 +9,8 @@ __pycache__/
 topo_map_generator.egg-info/
 build/
 dist/
+
+# native build artifacts
+osmand-native/build/
+osmand-native/build-asan/
+osmand-native/resources-bundle/

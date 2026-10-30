@@ -1,0 +1,458 @@
+From ded01e59daba4072f14d08aa54b54fdb0f1d2b90 Mon Sep 17 00:00:00 2001
+From: Cui Yuting <yutingcui@gmail.com>
+Date: Fri, 30 Oct 2026 16:55:47 +0800
+Subject: [PATCH] EyePiece print-rendering patches for topo map generation
+
+- Export raster georeference: true corner lat/lon via
+  getLocationFromScreenPoint -> <image>.georef.json
+- Hillshade: expose -slopeColors (shade*slope blend fix); OsmAnd standard
+  hillshade_main/hillshade_color palettes work with gdaldem; drop the
+  hardcoded -z 2 vertical exaggeration
+- Coordinate grid: -primaryGrid=utm|wgs84 + granularity gate fix
+- Elevation/3D relief off unless -elevation (displacement warped rasters)
+- Frame loop: hold renderer idle ~3s in single-raster mode (cold-start
+  captures used to grab stub tiles); tolerate shutdown segfault
+---
+ include/OsmAndCore/Map/MapRendererTypes.h |   2 +-
+ src/GeoTiffCollection_P.cpp               |   6 +-
+ src/ICoreResourcesProvider.cpp            |  10 +-
+ src/Map/MapRenderer.cpp                   |   2 +
+ src/Map/MapRendererResourcesManager.cpp   |   8 +
+ src/Map/MapRendererTypes.cpp              |   1 +
+ src/ObfsCollection_P.cpp                  |   6 +-
+ tools/include/OsmAndCoreTools/EyePiece.h  |  14 ++
+ tools/src/EyePiece.cpp                    | 193 +++++++++++++++++++++-
+ 9 files changed, 230 insertions(+), 12 deletions(-)
+
+diff --git a/include/OsmAndCore/Map/MapRendererTypes.h b/include/OsmAndCore/Map/MapRendererTypes.h
+index 5363df588..e530c5429 100644
+--- a/include/OsmAndCore/Map/MapRendererTypes.h
++++ b/include/OsmAndCore/Map/MapRendererTypes.h
+@@ -552,7 +552,7 @@ namespace OsmAnd
+         QString getMarkX(const Projection projection,
+             const Format format, const PointD& coordinates, const int zone, const double gap) const;
+         QString getMarkY(const Projection projection,
+-            const const Format format, const PointD& coordinates, const int zone, const double gap) const;
++            const Format format, const PointD& coordinates, const int zone, const double gap) const;
+         PointD getCurrentGaps(const PointI& target31, const ZoomLevel zoomLevel,
+             PointD* refLons = nullptr, PointD* refLats = nullptr) const;
+         double correctGap(const Projection projection, const double gap) const;
+diff --git a/src/GeoTiffCollection_P.cpp b/src/GeoTiffCollection_P.cpp
+index f07e890b4..61797648c 100644
+--- a/src/GeoTiffCollection_P.cpp
++++ b/src/GeoTiffCollection_P.cpp
+@@ -516,8 +516,10 @@ inline bool OsmAnd::GeoTiffCollection_P::postProcess(
+                 {
+                     if (procParameters.rasterType == GeoTiffCollection::RasterType::Hillshade)
+                     {
+-                        // Compose hybrid hillshade raster
+-                        const char* hillshadeArgs[] = { "-of", outputFormat, "-z", "2", NULL };
++                        // Compose hybrid hillshade raster (standard vertical
++                        // scale; the old "-z 2" exaggeration doubled the
++                        // contrast and made the 39% visibility look too dark)
++                        const char* hillshadeArgs[] = { "-of", outputFormat, NULL };
+                         if (GDALDEMProcessingOptions* hillshadeOptions = GDALDEMProcessingOptionsNew(
+                             const_cast<char **>(hillshadeArgs), NULL))
+                         {
+diff --git a/src/ICoreResourcesProvider.cpp b/src/ICoreResourcesProvider.cpp
+index 4168dc6ee..d01910bc1 100644
+--- a/src/ICoreResourcesProvider.cpp
++++ b/src/ICoreResourcesProvider.cpp
+@@ -20,11 +20,17 @@ sk_sp<SkImage> OsmAnd::ICoreResourcesProvider::getResourceAsImage(
+     const float displayDensityFactor) const
+ {
+     bool ok = false;
++    fprintf(stderr, "OSMAND img: looking up %s (ddf=%f)\n", qPrintable(name), displayDensityFactor);
+     const auto data = getResource(name, displayDensityFactor, &ok);
++    fprintf(stderr, "OSMAND img: lookup done ok=%d size=%d\n", (int)ok, (int)data.size());
+     if (!ok)
++    {
+         return nullptr;
+-
+-    return SkiaUtilities::createImageFromData(data);
++    }
++    fprintf(stderr, "OSMAND img: decoding %s\n", qPrintable(name));
++    const auto image = SkiaUtilities::createImageFromData(data);
++    fprintf(stderr, "OSMAND img: decoded %s -> %s\n", qPrintable(name), image ? "ok" : "null");
++    return image;
+ }
+ 
+ sk_sp<SkImage> OsmAnd::ICoreResourcesProvider::getResourceAsImage(const QString& name) const
+diff --git a/src/Map/MapRenderer.cpp b/src/Map/MapRenderer.cpp
+index d1a052381..1e6460870 100644
+--- a/src/Map/MapRenderer.cpp
++++ b/src/Map/MapRenderer.cpp
+@@ -406,7 +406,9 @@ bool OsmAnd::MapRenderer::initializeRendering(bool fresh /* = true */)
+ 
+     ok = gpuAPI->initialize();
+     if (!ok)
++    {
+         return false;
++    }
+ 
+     if (!_isRenderingInitialized)
+     {
+diff --git a/src/Map/MapRendererResourcesManager.cpp b/src/Map/MapRendererResourcesManager.cpp
+index c484f1b26..697fd66c4 100644
+--- a/src/Map/MapRendererResourcesManager.cpp
++++ b/src/Map/MapRendererResourcesManager.cpp
+@@ -160,7 +160,9 @@ bool OsmAnd::MapRendererResourcesManager::initializeTileStub(
+         resourceName,
+         renderer->setupOptions.displayDensityFactor);
+     if (!image)
++    {
+         return false;
++    }
+ 
+     std::shared_ptr<const GPUAPI::ResourceInGPU> resource;
+     std::shared_ptr<const IRasterMapLayerProvider::Data> tile(new IRasterMapLayerProvider::Data(
+@@ -170,7 +172,9 @@ bool OsmAnd::MapRendererResourcesManager::initializeTileStub(
+         1.0f,
+         image));
+     if (!uploadTiledDataToGPU(tile, resource))
++    {
+         return false;
++    }
+ 
+     outResource = resource;
+     return true;
+@@ -182,7 +186,9 @@ bool OsmAnd::MapRendererResourcesManager::initializeEmptyStub(
+     const auto image = SkiaUtilities::getEmptyImage();
+ 
+     if (!image)
++    {
+         return false;
++    }
+ 
+     std::shared_ptr<const GPUAPI::ResourceInGPU> resource;
+     std::shared_ptr<const IRasterMapLayerProvider::Data> tile(new IRasterMapLayerProvider::Data(
+@@ -192,7 +198,9 @@ bool OsmAnd::MapRendererResourcesManager::initializeEmptyStub(
+         1.0f,
+         image));
+     if (!uploadTiledDataToGPU(tile, resource))
++    {
+         return false;
++    }
+ 
+     outResource = resource;
+     return true;
+diff --git a/src/Map/MapRendererTypes.cpp b/src/Map/MapRendererTypes.cpp
+index d3da8df1e..5188fad1a 100644
+--- a/src/Map/MapRendererTypes.cpp
++++ b/src/Map/MapRendererTypes.cpp
+@@ -322,6 +322,7 @@ OsmAnd::GridConfiguration& OsmAnd::GridConfiguration::setProjectionConstants(
+                 scaleFactor.x, parameters->constants1, parameters->constants2);
+             break;
+         default:
++            break;
+     }
+     return *this;
+ }
+diff --git a/src/ObfsCollection_P.cpp b/src/ObfsCollection_P.cpp
+index 505b76f76..3777d434a 100644
+--- a/src/ObfsCollection_P.cpp
++++ b/src/ObfsCollection_P.cpp
+@@ -193,6 +193,10 @@ void OsmAnd::ObfsCollection_P::collectSources() const
+                     continue;
+             }
+ 
++            // The cache instance is only created for directory origins,
++            // but single-file sources rely on it as well
++            if (!cachedOsmandIndexes)
++                cachedOsmandIndexes = std::make_shared<CachedOsmandIndexes>();
+             auto obfFile = cachedOsmandIndexes->getObfFile(obfFilePath);
+             collectedSources.insert(obfFilePath, obfFile);
+         }
+@@ -246,7 +250,7 @@ void OsmAnd::ObfsCollection_P::collectSources() const
+         }
+     }
+ 
+-    if (cachedOsmandIndexes && _collectedSources.size() > 0)
++    if (cachedOsmandIndexes && indCache && _collectedSources.size() > 0)
+         cachedOsmandIndexes->writeToFile(indCache->fileName());
+     if (indCache)
+         delete indCache;
+diff --git a/tools/include/OsmAndCoreTools/EyePiece.h b/tools/include/OsmAndCoreTools/EyePiece.h
+index 8dce650da..53d67fee7 100644
+--- a/tools/include/OsmAndCoreTools/EyePiece.h
++++ b/tools/include/OsmAndCoreTools/EyePiece.h
+@@ -71,6 +71,20 @@ namespace OsmAndTools
+             float symbolsScale;
+             QString locale;
+             bool noSymbols = false;
++            bool hillshade = false;
++            QString hillshadeColors;
++            /** Slope-to-grayscale ramp for the hillshade blend (white = flat,
++                black = steep).  Empty disables the slope term. */
++            QString slopeColors;
++            /** Opacity of the terrain hillshade shading (0 = none, 1 = full strength). */
++            float hillshadeOpacity = 0.39f;
++            /** 3D terrain relief (displacement + shading); off by default because
++                it warps the rendered raster geometry. */
++            bool elevation = false;
++            /** Coordinate grid projection: empty = off, otherwise "utm", "wgs84", "mgrs", ... */
++            QString primaryGrid;
++            /** Desired screen distance in px between primary grid lines. */
++            float primaryGridGap = 0.0f;
+             bool verbose = false;
+ #if defined(OSMAND_TARGET_OS_linux)
+             bool useLegacyContext;
+diff --git a/tools/src/EyePiece.cpp b/tools/src/EyePiece.cpp
+index cc33e40cd..6878eb207 100644
+--- a/tools/src/EyePiece.cpp
++++ b/tools/src/EyePiece.cpp
+@@ -6,6 +6,9 @@
+ #include <limits>
+ #include <QRegularExpression>
+ #include <QThread>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
+ #include <OsmAndCore/restore_internal_warnings.h>
+ 
+ #include <OsmAndCore.h>
+@@ -25,6 +28,7 @@
+ #include <OsmAndCore/Map/MapRasterLayerProvider_Software.h>
+ #include <OsmAndCore/Map/IMapElevationDataProvider.h>
+ #include <OsmAndCore/Map/SqliteHeightmapTileProvider.h>
++#include <OsmAndCore/Map/HillshadeRasterMapLayerProvider.h>
+ 
+ #include <OsmAndCore/ignore_warnings_on_external_includes.h>
+ #if defined(OSMAND_TARGET_OS_windows)
+@@ -33,7 +37,7 @@
+ #endif
+ #include <OsmAndCore/restore_internal_warnings.h>
+ 
+-#define OSMAND_VIA_EGL //Remove to initialize OpenGL via X11
++// #define OSMAND_VIA_EGL //Remove to initialize OpenGL via X11
+ 
+ #include <OsmAndCore/ignore_warnings_on_external_includes.h>
+ #include <GL/glew.h>
+@@ -549,7 +553,7 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+     const auto p_glXChooseFBConfigSGIX = (PFNGLXCHOOSEFBCONFIGSGIXPROC)glXGetProcAddress((const GLubyte *)"glXChooseFBConfigSGIX");
+     int framebufferConfigurationsCount = 0;
+     GLXFBConfig* framebufferConfigurations = nullptr;
+-    const int framebufferConfigurationAttribs[] = {
++    int framebufferConfigurationAttribs[] = {
+         GLX_DRAWABLE_TYPE, GLX_PBUFFER_BIT,
+         GLX_RENDER_TYPE, GLX_RGBA_BIT,
+         GLX_RED_SIZE, 8,
+@@ -1034,10 +1038,85 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+             mapRenderer->addSymbolsProvider(binaryMapStaticSymbolProvider);
+         mapRenderer->setMapLayerProvider(0, binaryMapRasterTileProvider);
+ 
+-        if (configuration.geotiffCollection)
++        // Optional hillshade overlay generated from the geotiff heightmaps
++        if (configuration.hillshade && configuration.geotiffCollection)
++        {
++            if (configuration.verbose)
++                output << xT("Adding hillshade raster layer...") << std::endl;
++            const std::shared_ptr<OsmAnd::IRasterMapLayerProvider> hillshadeLayer(
++                new OsmAnd::HillshadeRasterMapLayerProvider(
++                    configuration.geotiffCollection,
++                    configuration.hillshadeColors,
++                    // The slope grayscale feeds the shade*slope blend; without
++                    // it the blend collapses to a uniform wash with no relief.
++                    configuration.slopeColors));
++            mapRenderer->setMapLayerProvider(1, hillshadeLayer);
++
++            OsmAnd::MapLayerConfiguration hillshadeLayerConfiguration;
++            hillshadeLayerConfiguration.opacityFactor = configuration.hillshadeOpacity;
++            mapRenderer->setMapLayerConfiguration(1, hillshadeLayerConfiguration);
++        }
++
++        // 3D relief (terrain displacement) warps the rendered raster and shifts
++        // same-coordinate points, and its full-strength default shading darkens
++        // the basemap - keep it off unless explicitly requested via -elevation.
++        if (configuration.elevation && configuration.geotiffCollection)
++        {
+             mapRenderer->setElevationDataProvider(std::make_shared<OsmAnd::SqliteHeightmapTileProvider>(
+                 configuration.geotiffCollection, mapRenderer->getElevationDataTileSize()));
+ 
++            OsmAnd::ElevationConfiguration elevationConfiguration;
++            elevationConfiguration.setVisualizationStyle(
++                OsmAnd::ElevationConfiguration::VisualizationStyle::HillshadeCombined);
++            elevationConfiguration.setVisualizationAlpha(configuration.hillshadeOpacity);
++            mapRenderer->setElevationConfiguration(elevationConfiguration);
++        }
++
++        // Optional coordinate grid rendered into the map raster (e.g. "utm" to
++        // verify georeferencing of the output)
++        if (!configuration.primaryGrid.isEmpty())
++        {
++            OsmAnd::GridConfiguration gridConfiguration;
++            gridConfiguration.setPrimaryGrid(true);
++            const auto& projection = configuration.primaryGrid;
++            if (projection == QLatin1String("utm"))
++                gridConfiguration.setPrimaryProjection(OsmAnd::GridConfiguration::Projection::UTM);
++            else if (projection == QLatin1String("wgs84") || projection == QLatin1String("latlon"))
++                gridConfiguration.setPrimaryProjection(OsmAnd::GridConfiguration::Projection::WGS84);
++            else if (projection == QLatin1String("mercator"))
++                gridConfiguration.setPrimaryProjection(OsmAnd::GridConfiguration::Projection::Mercator);
++            else if (projection == QLatin1String("tm"))
++                gridConfiguration.setPrimaryProjection(OsmAnd::GridConfiguration::Projection::TM);
++            else if (projection == QLatin1String("mgrs"))
++                gridConfiguration.setPrimaryProjection(OsmAnd::GridConfiguration::Projection::MGRS);
++            else
++            {
++                output << xT("Unsupported primary grid projection: '")
++                    << QStringToStlString(projection) << xT("'") << std::endl;
++                return false;
++            }
++            if (configuration.primaryGridGap > 0.0f)
++                gridConfiguration.setPrimaryGap(configuration.primaryGridGap);
++            // Non-zero granularity is required for the grid to be drawn at
++            // zoom levels above 2 (see the "isSmall" check in the layers stage)
++            gridConfiguration.setPrimaryGranularity(1.0f);
++            mapRenderer->setGridConfiguration(gridConfiguration);
++        }
++
++        // Warm up OBF sources on the main thread: the index cache in
++        // CachedOsmandIndexes is not race-free when first touched from
++        // concurrent worker threads
++        if (configuration.verbose)
++            output << xT("Warming up OBF sources...") << std::endl;
++        {
++            const OsmAnd::AreaI warmupArea;
++            configuration.obfsCollection->obtainDataInterface(
++                &warmupArea,
++                OsmAnd::ZoomLevel0,
++                OsmAnd::ZoomLevel31,
++                OsmAnd::ObfDataTypesMask().set(OsmAnd::ObfDataType::Map));
++        }
++
+         // Initialize rendering
+         if (configuration.verbose)
+             output << xT("Initializing rendering...") << std::endl;
+@@ -1118,9 +1197,14 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+         int tileZoom = 0;
+         int64_t tileX = 0;
+         int64_t tileY = 0;
+-        // How many times in a row the renderer has to report idle before the frame is read back
+-        const auto idleConfirmationsRequired = 3u;
+-        const auto idleConfirmationIntervalMs = 10u;
++        // How many times in a row the renderer has to report idle before the frame is read back.
++        // In single-raster mode the first frame races the resource pipeline: on a cold start the
++        // renderer reports idle until the tile requests of the new target are registered, which
++        // can take seconds with large OBF collections (mmap warm-up, shader compilation), and a
++        // short hold captures nothing but stub tiles. Hold idle for ~3 s before capturing;
++        // batch tile mode stays snappy.
++        const auto idleConfirmationsRequired = tilesMode ? 3u : 30u;
++        const auto idleConfirmationIntervalMs = tilesMode ? 10u : 100u;
+         auto idleConfirmations = 0u;
+         for (;; framesCounter++)
+         {
+@@ -1314,6 +1398,59 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+                 }
+             }
+ 
++            // Export the georeference of the rendered raster: the geographic
++            // coordinates of the four corner pixel centres, obtained from the
++            // renderer itself, so downstream tooling can place the image at its
++            // true position without assuming the zoom formula.
++            if (!savedImageFilename.isEmpty())
++            {
++                QJsonObject georef;
++                georef.insert(QStringLiteral("width"), static_cast<double>(configuration.outputRasterWidth));
++                georef.insert(QStringLiteral("height"), static_cast<double>(configuration.outputRasterHeight));
++                georef.insert(QStringLiteral("zoom"), static_cast<double>(configuration.zoom));
++                const OsmAnd::PointD cornerScreenPoints[4] = {
++                    OsmAnd::PointD(0.0, 0.0),
++                    OsmAnd::PointD(configuration.outputRasterWidth - 1.0, 0.0),
++                    OsmAnd::PointD(configuration.outputRasterWidth - 1.0, configuration.outputRasterHeight - 1.0),
++                    OsmAnd::PointD(0.0, configuration.outputRasterHeight - 1.0),
++                };
++                const QString cornerNames[4] = {
++                    QStringLiteral("topLeft"), QStringLiteral("topRight"),
++                    QStringLiteral("bottomRight"), QStringLiteral("bottomLeft")
++                };
++                QJsonArray cornerArray;
++                bool georefOk = true;
++                for (auto cornerIndex = 0; cornerIndex < 4; cornerIndex++)
++                {
++                    OsmAnd::PointI location31;
++                    if (!mapRenderer->getLocationFromScreenPoint(cornerScreenPoints[cornerIndex], location31))
++                    {
++                        georefOk = false;
++                        break;
++                    }
++                    QJsonObject corner;
++                    corner.insert(QStringLiteral("x"), cornerScreenPoints[cornerIndex].x);
++                    corner.insert(QStringLiteral("y"), cornerScreenPoints[cornerIndex].y);
++                    corner.insert(QStringLiteral("lat"), OsmAnd::Utilities::getLatitudeFromTile(OsmAnd::ZoomLevel31, location31.y));
++                    corner.insert(QStringLiteral("lon"), OsmAnd::Utilities::getLongitudeFromTile(OsmAnd::ZoomLevel31, location31.x));
++                    corner.insert(QStringLiteral("name"), cornerNames[cornerIndex]);
++                    cornerArray.append(corner);
++                }
++                georef.insert(QStringLiteral("corners"), cornerArray);
++                georef.insert(QStringLiteral("valid"), georefOk);
++
++                const auto georefFilename = savedImageFilename + QStringLiteral(".georef.json");
++                QFile georefFile(georefFilename);
++                if (georefFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
++                {
++                    const auto georefData = QJsonDocument(georef).toJson();
++                    georefFile.write(georefData);
++                    georefFile.close();
++                    if (configuration.verbose)
++                        output << xT("Georeference saved to '") << QStringToStlString(georefFilename) << xT("'") << std::endl;
++                }
++            }
++
+             if (!configuration.outputJSONFilename.isEmpty())
+             {
+                 auto fileName = configuration.outputJSONFilename;
+@@ -1992,6 +2129,50 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+         {
+             outConfiguration.noSymbols = true;
+         }
++        else if (arg == QLatin1String("-hillshade"))
++        {
++            outConfiguration.hillshade = true;
++        }
++        else if (arg == QLatin1String("-elevation"))
++        {
++            outConfiguration.elevation = true;
++        }
++        else if (arg.startsWith(QLatin1String("-hillshadeColors=")))
++        {
++            outConfiguration.hillshadeColors = Utilities::resolvePath(arg.mid(strlen("-hillshadeColors=")));
++        }
++        else if (arg.startsWith(QLatin1String("-slopeColors=")))
++        {
++            outConfiguration.slopeColors = Utilities::resolvePath(arg.mid(strlen("-slopeColors=")));
++        }
++        else if (arg.startsWith(QLatin1String("-hillshadeOpacity=")))
++        {
++            const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-hillshadeOpacity=")));
++
++            bool ok = false;
++            outConfiguration.hillshadeOpacity = value.toFloat(&ok);
++            if (!ok || outConfiguration.hillshadeOpacity < 0.0f || outConfiguration.hillshadeOpacity > 1.0f)
++            {
++                outError = QString("'%1' can not be parsed as hillshade opacity (must be within [0.0, 1.0])").arg(value);
++                return false;
++            }
++        }
++        else if (arg.startsWith(QLatin1String("-primaryGrid=")))
++        {
++            outConfiguration.primaryGrid = Utilities::purifyArgumentValue(arg.mid(strlen("-primaryGrid="))).toLower();
++        }
++        else if (arg.startsWith(QLatin1String("-primaryGridGap=")))
++        {
++            const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-primaryGridGap=")));
++
++            bool ok = false;
++            outConfiguration.primaryGridGap = value.toFloat(&ok);
++            if (!ok || outConfiguration.primaryGridGap <= 0.0f)
++            {
++                outError = QString("'%1' can not be parsed as primary grid gap in pixels").arg(value);
++                return false;
++            }
++        }
+         else if (arg == QLatin1String("-verbose"))
+         {
+             outConfiguration.verbose = true;
+-- 
+2.53.0
+

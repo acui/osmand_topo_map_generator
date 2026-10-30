@@ -1,0 +1,21 @@
+From eb897f60fd16eb8fe417c40d151e1f192cc244e2 Mon Sep 17 00:00:00 2001
+From: Cui Yuting <yutingcui@gmail.com>
+Date: Fri, 30 Oct 2026 16:59:26 +0800
+Subject: [PATCH 2/2] Ignore generated resources-bundle.cmake
+
+---
+ .gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.gitignore b/.gitignore
+index 0c9a281c..36c5a349 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -19,3 +19,4 @@ AGENTS.md
+ *.DS_Store
+ # Search obfs
+ /test-resources/search/*.obf
++resources-bundle.cmake
+-- 
+2.53.0
+

@@ -1,0 +1,220 @@
+From ad3d693ddf53d267ba93639019ed7d4a20c41df5 Mon Sep 17 00:00:00 2001
+From: Cui Yuting <yutingcui@gmail.com>
+Date: Fri, 30 Oct 2026 16:55:50 +0800
+Subject: [PATCH] Headless build tweaks for map-rasterizer
+
+---
+ cpp-tools/map-rasterizer/CMakeLists.txt  | 4 ----
+ cpp-tools/map-rasterizer/main.cpp        | 5 +++++
+ cpp-tools/map-viewer/CMakeLists.txt      | 4 ----
+ cpp-tools/obf-inspector/CMakeLists.txt   | 4 ----
+ cpp-tools/route-tester/CMakeLists.txt    | 4 ----
+ cpp-tools/style-compiler/CMakeLists.txt  | 4 ----
+ cpp-tools/style-evaluator/CMakeLists.txt | 4 ----
+ cpp-tools/tools.cmake                    | 4 ++--
+ 8 files changed, 7 insertions(+), 26 deletions(-)
+
+diff --git a/cpp-tools/map-rasterizer/CMakeLists.txt b/cpp-tools/map-rasterizer/CMakeLists.txt
+index 172347ab8..309194c37 100644
+--- a/cpp-tools/map-rasterizer/CMakeLists.txt
++++ b/cpp-tools/map-rasterizer/CMakeLists.txt
+@@ -6,11 +6,9 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 	)
+ 	add_dependencies(eyepiece
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ 	target_link_libraries(eyepiece
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ endif()
+ 
+@@ -20,10 +18,8 @@ if (TARGET OsmAndCoreTools_static_standalone)
+ 	)
+ 	add_dependencies(eyepiece_standalone
+ 		OsmAndCoreTools_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 	)
+ 	target_link_libraries(eyepiece_standalone
+ 		OsmAndCoreTools_static_standalone
+ 	)
+-	link_entire_static_library(eyepiece_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/map-rasterizer/main.cpp b/cpp-tools/map-rasterizer/main.cpp
+index 3de7c1b2c..e124491bc 100644
+--- a/cpp-tools/map-rasterizer/main.cpp
++++ b/cpp-tools/map-rasterizer/main.cpp
+@@ -12,6 +12,7 @@
+ #include <OsmAndCore/QtExtensions.h>
+ #include <QFile>
+ #include <QStringList>
++#include <QThreadPool>
+ 
+ #include <OsmAndCoreTools/EyePiece.h>
+ #include <OsmAndCore/CoreResourcesEmbeddedBundle.h>
+@@ -54,6 +55,10 @@ int main(int argc, char* argv[])
+         return -1;
+     }
+ 
++    // The obf index cache is not thread-safe during concurrent collection;
++    // restrict the thread pool until that is fixed upstream
++    QThreadPool::globalInstance()->setMaxThreadCount(1);
++
+     // Process rasterization request
+     const auto success = OsmAndTools::EyePiece(configuration).rasterize();
+ 
+diff --git a/cpp-tools/map-viewer/CMakeLists.txt b/cpp-tools/map-viewer/CMakeLists.txt
+index fc2370e01..1b9edc738 100644
+--- a/cpp-tools/map-viewer/CMakeLists.txt
++++ b/cpp-tools/map-viewer/CMakeLists.txt
+@@ -52,12 +52,10 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 
+ 	add_dependencies(bird
+ 		OsmAndCore_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 		${extra_dependencies}
+ 	)
+ 	target_link_libraries(bird
+ 		OsmAndCore_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 		${extra_libraries}
+ 	)
+ 	target_compile_definitions(bird
+@@ -73,7 +71,6 @@ if (TARGET OsmAndCore_static_standalone)
+ 
+ 	add_dependencies(bird_standalone
+ 		OsmAndCore_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 		${extra_dependencies}
+ 	)
+ 	target_link_libraries(bird_standalone
+@@ -84,5 +81,4 @@ if (TARGET OsmAndCore_static_standalone)
+ 		PRIVATE
+ 			${target_specific_private_definitions}
+ 	)
+-	link_entire_static_library(bird_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/obf-inspector/CMakeLists.txt b/cpp-tools/obf-inspector/CMakeLists.txt
+index a71bbe518..5caafe3ff 100644
+--- a/cpp-tools/obf-inspector/CMakeLists.txt
++++ b/cpp-tools/obf-inspector/CMakeLists.txt
+@@ -6,11 +6,9 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 	)
+ 	add_dependencies(inspector
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ 	target_link_libraries(inspector
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ endif()
+ 
+@@ -20,10 +18,8 @@ if (TARGET OsmAndCoreTools_static_standalone)
+ 	)
+ 	add_dependencies(inspector_standalone
+ 		OsmAndCoreTools_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 	)
+ 	target_link_libraries(inspector_standalone
+ 		OsmAndCoreTools_static_standalone
+ 	)
+-	link_entire_static_library(inspector_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/route-tester/CMakeLists.txt b/cpp-tools/route-tester/CMakeLists.txt
+index 2904488a1..bdff595c2 100644
+--- a/cpp-tools/route-tester/CMakeLists.txt
++++ b/cpp-tools/route-tester/CMakeLists.txt
+@@ -6,11 +6,9 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 	)
+ 	add_dependencies(voyager
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ 	target_link_libraries(voyager
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ endif()
+ 
+@@ -20,10 +18,8 @@ if (TARGET OsmAndCoreTools_static_standalone)
+ 	)
+ 	add_dependencies(voyager_standalone
+ 		OsmAndCoreTools_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 	)
+ 	target_link_libraries(voyager_standalone
+ 		OsmAndCoreTools_static_standalone
+ 	)
+-	link_entire_static_library(voyager_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/style-compiler/CMakeLists.txt b/cpp-tools/style-compiler/CMakeLists.txt
+index c1fdee40c..09ebb51b2 100644
+--- a/cpp-tools/style-compiler/CMakeLists.txt
++++ b/cpp-tools/style-compiler/CMakeLists.txt
+@@ -6,11 +6,9 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 	)
+ 	add_dependencies(cstyle
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ 	target_link_libraries(cstyle
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ endif()
+ 
+@@ -20,10 +18,8 @@ if (TARGET OsmAndCoreTools_static_standalone)
+ 	)
+ 	add_dependencies(cstyle_standalone
+ 		OsmAndCoreTools_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 	)
+ 	target_link_libraries(cstyle_standalone
+ 		OsmAndCoreTools_static_standalone
+ 	)
+-	link_entire_static_library(cstyle_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/style-evaluator/CMakeLists.txt b/cpp-tools/style-evaluator/CMakeLists.txt
+index bd342c5aa..35c076be1 100644
+--- a/cpp-tools/style-evaluator/CMakeLists.txt
++++ b/cpp-tools/style-evaluator/CMakeLists.txt
+@@ -6,11 +6,9 @@ if (CMAKE_SHARED_LIBS_ALLOWED_ON_TARGET)
+ 	)
+ 	add_dependencies(styler
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ 	target_link_libraries(styler
+ 		OsmAndCoreTools_shared
+-		OsmAndCore_ResourcesBundle_shared
+ 	)
+ endif()
+ 
+@@ -20,10 +18,8 @@ if (TARGET OsmAndCoreTools_static_standalone)
+ 	)
+ 	add_dependencies(styler_standalone
+ 		OsmAndCoreTools_static_standalone
+-		OsmAndCore_ResourcesBundle_static
+ 	)
+ 	target_link_libraries(styler_standalone
+ 		OsmAndCoreTools_static_standalone
+ 	)
+-	link_entire_static_library(styler_standalone OsmAndCore_ResourcesBundle_static)
+ endif()
+diff --git a/cpp-tools/tools.cmake b/cpp-tools/tools.cmake
+index fd29b84ef..2c92cff09 100644
+--- a/cpp-tools/tools.cmake
++++ b/cpp-tools/tools.cmake
+@@ -13,5 +13,5 @@ add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/style-evaluator" "tools/cpp-too
+ # Map style compiler
+ add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/style-compiler" "tools/cpp-tools/style-compiler")
+ 
+-# 3D Map renderer (development)
+-add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/map-viewer" "tools/cpp-tools/map-viewer")
++# 3D Map renderer (development) - skipped
++# add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/map-viewer" "tools/cpp-tools/map-viewer")
+-- 
+2.53.0
+

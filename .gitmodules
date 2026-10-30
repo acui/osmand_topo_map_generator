@@ -1,0 +1,15 @@
+[submodule "osmand-native/core"]
+	path = osmand-native/core
+	url = https://github.com/osmandapp/OsmAnd-core.git
+	branch = master
+[submodule "osmand-native/tools"]
+	path = osmand-native/tools
+	url = https://github.com/osmandapp/OsmAnd-tools.git
+	branch = master
+[submodule "osmand-native/OsmAnd-resources"]
+	path = osmand-native/OsmAnd-resources
+	url = https://github.com/osmandapp/OsmAnd-resources.git
+	branch = master
+[submodule "osmand-native/core-legacy"]
+	path = osmand-native/core-legacy
+	url = https://github.com/osmandapp/OsmAnd-core-legacy.git

@@ -8,3 +8,4 @@ pymap3d
 svg.py
 tqdm
 utm
+Pillow

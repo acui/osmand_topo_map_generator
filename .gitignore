@@ -3,4 +3,4 @@ __pycache__/
 /cache/
 /wmm/*.COF
 /*.ipynb
-/topomaps/
+/topomaps/.codebuddy/

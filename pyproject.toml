@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topo-map-generator"
+version = "0.2.0"
+description = "OsmAnd-based 1:25000 topographic map poster generator (SVG with true UTM grid, EyePiece supersampled rendering)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+dependencies = [
+  "numpy",
+  "opencv-python",
+  "Pillow",
+  "pydantic>=2",
+  "pydantic-settings",
+  "pymap3d",
+  "pygeomag",
+  "svg.py",
+  "tqdm",
+  "lxml",
+  "utm",
+]
+
+[project.scripts]
+topo-map-generator = "topo_map_generator:main"
+
+[tool.setuptools]
+packages = ["obf", "render", "schemas", "wmm"]
+py-modules = ["topo_map_generator"]
+
+[tool.setuptools.package-data]
+wmm = ["*.COF"]

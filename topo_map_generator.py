@@ -990,457 +990,457 @@ class TopoMap:
             ]
         )
 
-if __name__ == "__main__":
-    from pydantic import Field, field_validator
-    from pydantic_settings import BaseSettings, CliPositionalArg
-    from typing import get_args
-    import re
+def main():
+        from pydantic import Field, field_validator
+        from pydantic_settings import BaseSettings, CliPositionalArg
+        from typing import get_args
+        import re
 
-    class Arguments(BaseSettings, cli_parse_args=True):
-        name: CliPositionalArg[str] = Field(description="Name of the map")
-        zone_number_letter: CliPositionalArg[str] = Field(description="UTM zone number and letter (e.g. 33T)")
-        easting: CliPositionalArg[int] = Field(description="Easting coordinate in UTM")
-        northing: CliPositionalArg[int] = Field(description="Northing coordinate in UTM")
-        scale: CliPositionalArg[str] = Field(description="Scale of the map (e.g. 1:25000)")
-        map_root: CliPositionalArg[Path] = Field(description="Root directory for the working directory")
-        paper_size: Literal["A4"] = "A4"
-        orientation: Literal["portrait", "landscape"] = "portrait"
-        mode: Literal["render", "core", "screenshots"] = Field(
-            default="render",
-            description="render: Python OBF renderer; core: OsmAnd-core (EyePiece) offscreen renderer; screenshots: legacy pipeline")
-        eyepiece: Path | None = Field(
-            default=None,
-            description="Path to the EyePiece binary (core mode, default: ~/projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece)")
-        obf_dir: Path = Field(
-            default=Path.home() / "osmand-data",
-            description="Directory with OsmAnd .obf files (render mode)")
-        dpi: int = Field(default=300, description="Basemap rendering resolution (render mode)")
-        style_dpi: float = Field(
-            default=300.0,
-            description="Base dpi that defines the physical size of roads/labels/icons; the target --dpi is supersampled from it (core mode)")
-        map_language: Literal["local", "user", "bilingual"] = Field(
-            default="user",
-            description="Label language: local names / user language / bilingual")
-        user_lang: str = Field(default="zh", description="User language code for labels")
-        render_style: Path | None = Field(
-            default=None, description="Custom render.xml (default: styles/default.render.xml)")
-        style_addon: Path | None = Field(
-            default=None, description="Addon render style (default: styles/contourlines.addon.render.xml)")
-        contour_lines: Literal["disabled", "16", "15", "14", "13", "12", "11"] = Field(
-            default="12", description="Minimum zoom to draw contour lines")
-        contour_width: Literal["thin", "medium", "thick"] = Field(default="medium")
-        contour_color_scheme: str = Field(default="brown")
-        stroke_scale: float = Field(default=1.0, description="Line width multiplier")
-        text_scale: float = Field(default=1.0, description="Label size multiplier")
-        render_zoom: int = Field(default=15, description="OBF query/render zoom")
-        hillshade: bool = Field(default=False, description="Add hillshade relief overlay (core mode)")
-        hillshade_colors: Path | None = Field(default=None, description="Hillshade color ramp (default: styles/hillshade_topo.txt)")
-        hillshade_opacity: float = Field(
-            default=0.39,
-            description="Hillshade layer visibility 0.0-1.0 (core mode, OsmAnd standard is 0.39)")
-        geotiff_dir: Path | None = Field(
-            default=None,
-            description="Directory with heightmap GeoTIFFs (core mode, default: <obf_dir>/geotiff)")
+        class Arguments(BaseSettings, cli_parse_args=True):
+            name: CliPositionalArg[str] = Field(description="Name of the map")
+            zone_number_letter: CliPositionalArg[str] = Field(description="UTM zone number and letter (e.g. 33T)")
+            easting: CliPositionalArg[int] = Field(description="Easting coordinate in UTM")
+            northing: CliPositionalArg[int] = Field(description="Northing coordinate in UTM")
+            scale: CliPositionalArg[str] = Field(description="Scale of the map (e.g. 1:25000)")
+            map_root: CliPositionalArg[Path] = Field(description="Root directory for the working directory")
+            paper_size: Literal["A4"] = "A4"
+            orientation: Literal["portrait", "landscape"] = "portrait"
+            mode: Literal["render", "core", "screenshots"] = Field(
+                default="render",
+                description="render: Python OBF renderer; core: OsmAnd-core (EyePiece) offscreen renderer; screenshots: legacy pipeline")
+            eyepiece: Path | None = Field(
+                default=None,
+                description="Path to the EyePiece binary (core mode, default: ~/projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece)")
+            obf_dir: Path = Field(
+                default=Path.home() / "osmand-data",
+                description="Directory with OsmAnd .obf files (render mode)")
+            dpi: int = Field(default=300, description="Basemap rendering resolution (render mode)")
+            style_dpi: float = Field(
+                default=300.0,
+                description="Base dpi that defines the physical size of roads/labels/icons; the target --dpi is supersampled from it (core mode)")
+            map_language: Literal["local", "user", "bilingual"] = Field(
+                default="user",
+                description="Label language: local names / user language / bilingual")
+            user_lang: str = Field(default="zh", description="User language code for labels")
+            render_style: Path | None = Field(
+                default=None, description="Custom render.xml (default: styles/default.render.xml)")
+            style_addon: Path | None = Field(
+                default=None, description="Addon render style (default: styles/contourlines.addon.render.xml)")
+            contour_lines: Literal["disabled", "16", "15", "14", "13", "12", "11"] = Field(
+                default="12", description="Minimum zoom to draw contour lines")
+            contour_width: Literal["thin", "medium", "thick"] = Field(default="medium")
+            contour_color_scheme: str = Field(default="brown")
+            stroke_scale: float = Field(default=1.0, description="Line width multiplier")
+            text_scale: float = Field(default=1.0, description="Label size multiplier")
+            render_zoom: int = Field(default=15, description="OBF query/render zoom")
+            hillshade: bool = Field(default=False, description="Add hillshade relief overlay (core mode)")
+            hillshade_colors: Path | None = Field(default=None, description="Hillshade color ramp (default: styles/hillshade_topo.txt)")
+            hillshade_opacity: float = Field(
+                default=0.39,
+                description="Hillshade layer visibility 0.0-1.0 (core mode, OsmAnd standard is 0.39)")
+            geotiff_dir: Path | None = Field(
+                default=None,
+                description="Directory with heightmap GeoTIFFs (core mode, default: <obf_dir>/geotiff)")
         
-        @field_validator("zone_number_letter", mode="after")
-        @classmethod
-        def validate_zone_number_letter(cls, v:str) -> str:
-            if len(v) != 3:
-                raise ValueError("Zone number and letter must be in the format 'NNL' (e.g. 33T)")
-            zone_number = int(v[:2])
-            zone_letter = v[2].upper()
-            if zone_letter not in get_args(UTMZoneLetter):
-                raise ValueError(f"Zone letter must be one of {get_args(UTMZoneLetter)}")
-            return v
+            @field_validator("zone_number_letter", mode="after")
+            @classmethod
+            def validate_zone_number_letter(cls, v:str) -> str:
+                if len(v) != 3:
+                    raise ValueError("Zone number and letter must be in the format 'NNL' (e.g. 33T)")
+                zone_number = int(v[:2])
+                zone_letter = v[2].upper()
+                if zone_letter not in get_args(UTMZoneLetter):
+                    raise ValueError(f"Zone letter must be one of {get_args(UTMZoneLetter)}")
+                return v
         
-        @field_validator("scale", mode="after")
-        @classmethod
-        def validate_scale(cls, v:str) -> str:
-            m = re.match(r"^(\d+):(\d+)$", v)
-            if not m:
-                raise ValueError("Scale must be in the format 'MMM:NNN' (e.g. 1:25000)")
-            scale_numerator = int(m.group(1))
-            scale_denominator = int(m.group(2))
-            if scale_numerator <= 0 or scale_denominator <= 0:
-                raise ValueError("Scale must be positive")
-            return v
+            @field_validator("scale", mode="after")
+            @classmethod
+            def validate_scale(cls, v:str) -> str:
+                m = re.match(r"^(\d+):(\d+)$", v)
+                if not m:
+                    raise ValueError("Scale must be in the format 'MMM:NNN' (e.g. 1:25000)")
+                scale_numerator = int(m.group(1))
+                scale_denominator = int(m.group(2))
+                if scale_numerator <= 0 or scale_denominator <= 0:
+                    raise ValueError("Scale must be positive")
+                return v
         
-        @field_validator("easting", mode="after")
-        @classmethod
-        def validate_easting(cls, v:int) -> int:
-            if v < 100000 or v > 900000:
-                raise ValueError("Easting must be between 100000 and 900000")
-            return v
+            @field_validator("easting", mode="after")
+            @classmethod
+            def validate_easting(cls, v:int) -> int:
+                if v < 100000 or v > 900000:
+                    raise ValueError("Easting must be between 100000 and 900000")
+                return v
         
-        @field_validator("northing", mode="after")
-        @classmethod
-        def validate_northing(cls, v:int) -> int:
-            if v < 0 or v > 10000000:
-                raise ValueError("Northing must be between 0 and 10000000")
-            return v
+            @field_validator("northing", mode="after")
+            @classmethod
+            def validate_northing(cls, v:int) -> int:
+                if v < 0 or v > 10000000:
+                    raise ValueError("Northing must be between 0 and 10000000")
+                return v
 
-    args = Arguments()
+        args = Arguments()
 
-    poi = UTMCoordinate(
-        zone_number=int(args.zone_number_letter[:2]),
-        zone_letter=args.zone_number_letter[2],
-        easting=args.easting,
-        northing=args.northing
-    )
-
-    if not args.map_root.exists():
-        args.map_root.mkdir(parents=True, exist_ok=True)
-    topo_map = TopoMap(
-        layouts[args.paper_size][args.orientation],
-        args.name,
-        poi,
-        Fraction(*map(int, args.scale.split(":")))
-    )
-
-    if args.mode in ("render", "core"):
-        def collect_obf_files(zoom: int | None = None):
-            files = sorted(
-                p for p in args.obf_dir.glob("*.obf")
-                if not any(skip in p.name.lower() for skip in ("basemap", "wiki", "legend", "roads")))
-            for sub in ("srtm", "srtmf", "roads"):
-                sub_dir = args.obf_dir / sub
-                if sub_dir.is_dir():
-                    files.extend(sorted(sub_dir.glob("*.obf")))
-            if not files:
-                raise SystemExit(f"No .obf files found in {args.obf_dir}")
-            if zoom is not None:
-                # keep only files whose map roots cover the target area
-                from obf.obf_file import ObfFile
-                south, west, north, east = (
-                    bbox.bottom_left.to_latlon()[0], bbox.bottom_left.to_latlon()[1],
-                    bbox.top_right.to_latlon()[0], bbox.top_right.to_latlon()[1])
-                query_bbox = (south - 0.05, west - 0.05, north + 0.05, east + 0.05)
-                covered = []
-                for path in files:
-                    try:
-                        obf = ObfFile(path)
-                    except Exception as exc:  # unreadable file: skip quietly
-                        print(f"Skipping {path.name}: {exc}")
-                        continue
-                    keep = obf.may_cover(query_bbox, zoom=zoom)
-                    obf.close()
-                    if keep:
-                        covered.append(path)
-                print(f"Filtered {len(files)} -> {len(covered)} OBF files covering the area")
-                return covered
-            return files
-
-        def embed_basemap(png_path: Path, image_georef):
-            grid = topo_map.gridBoundingBox
-            k = 1000.0 * topo_map.scale  # paper millimetres per ground metre
-            if image_georef is None:
-                # No renderer georeference available: assume the raster covers
-                # the grid frame exactly (legacy behaviour).
-                e_tl, n_tl = grid.left, grid.top
-                e_br, n_br = grid.right, grid.bottom
-            else:
-                e_tl, n_tl, e_br, n_br = image_georef
-            width_mm = (e_br - e_tl) * k
-            height_mm = (n_tl - n_br) * k
-            rotated_map_size = np.array([width_mm, height_mm])
-            x_tl = (e_tl - grid.left) * k
-            y_tl = (grid.top - n_tl) * k
-            corners = [np.array([x_tl, y_tl]),
-                       np.array([x_tl + width_mm, y_tl]),
-                       np.array([x_tl + width_mm, y_tl + height_mm]),
-                       np.array([x_tl, y_tl + height_mm])]
-            topo_map.add_rendered_basemap(png_path, rotated_map_size, corners,
-                                          image_georef)
-            topo_map.draw_map()
-            svg_file = args.map_root / f"{args.name}.svg"
-            svg_file.write_text(str(topo_map.svg))
-            print(f"Map written to {svg_file}")
-
-        bbox = topo_map.gridBoundingBox
-        px_per_m = topo_map.scale * args.dpi / 0.0254
-        width_px = int(round((bbox.right - bbox.left) * px_per_m))
-        height_px = int(round((bbox.top - bbox.bottom) * px_per_m))
-
-    if args.mode == "render":
-        from render.style import RenderStyle
-        from render.renderer import Renderer, RenderOptions
-
-        style = RenderStyle()
-        style_path = args.render_style or Path(__file__).parent / "styles" / "default.render.xml"
-        style.load(style_path)
-        addon_path = args.style_addon or Path(__file__).parent / "styles" / "contourlines.addon.render.xml"
-        if addon_path and Path(addon_path).exists():
-            style.load(addon_path, addon=True)
-
-        obf_files = collect_obf_files()
-        print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
-
-        options = RenderOptions(
-            dpi=args.dpi,
-            zoom=args.render_zoom,
-            language=args.map_language,
-            user_lang=args.user_lang,
-            style_props={
-                "contourLines": args.contour_lines,
-                "contourWidth": args.contour_width,
-                "contourColorScheme": args.contour_color_scheme,
-            },
-            stroke_scale=args.stroke_scale,
-            text_scale=args.text_scale,
+        poi = UTMCoordinate(
+            zone_number=int(args.zone_number_letter[:2]),
+            zone_letter=args.zone_number_letter[2],
+            easting=args.easting,
+            northing=args.northing
         )
-        result = Renderer(obf_files, style, options).render(
-            bbox, topo_map.scale, args.map_root / f"{args.name}_render.png")
-        print(f"Basemap rendered: {result.png_path} "
-              f"({result.width_px}x{result.height_px}px, {result.stats})")
 
-        embed_basemap(result.png_path, result.width_px, result.height_px)
-        raise SystemExit(0)
+        if not args.map_root.exists():
+            args.map_root.mkdir(parents=True, exist_ok=True)
+        topo_map = TopoMap(
+            layouts[args.paper_size][args.orientation],
+            args.name,
+            poi,
+            Fraction(*map(int, args.scale.split(":")))
+        )
 
-    if args.mode == "core":
-        import math as _math
-        import os
-        import subprocess
+        if args.mode in ("render", "core"):
+            def collect_obf_files(zoom: int | None = None):
+                files = sorted(
+                    p for p in args.obf_dir.glob("*.obf")
+                    if not any(skip in p.name.lower() for skip in ("basemap", "wiki", "legend", "roads")))
+                for sub in ("srtm", "srtmf", "roads"):
+                    sub_dir = args.obf_dir / sub
+                    if sub_dir.is_dir():
+                        files.extend(sorted(sub_dir.glob("*.obf")))
+                if not files:
+                    raise SystemExit(f"No .obf files found in {args.obf_dir}")
+                if zoom is not None:
+                    # keep only files whose map roots cover the target area
+                    from obf.obf_file import ObfFile
+                    south, west, north, east = (
+                        bbox.bottom_left.to_latlon()[0], bbox.bottom_left.to_latlon()[1],
+                        bbox.top_right.to_latlon()[0], bbox.top_right.to_latlon()[1])
+                    query_bbox = (south - 0.05, west - 0.05, north + 0.05, east + 0.05)
+                    covered = []
+                    for path in files:
+                        try:
+                            obf = ObfFile(path)
+                        except Exception as exc:  # unreadable file: skip quietly
+                            print(f"Skipping {path.name}: {exc}")
+                            continue
+                        keep = obf.may_cover(query_bbox, zoom=zoom)
+                        obf.close()
+                        if keep:
+                            covered.append(path)
+                    print(f"Filtered {len(files)} -> {len(covered)} OBF files covering the area")
+                    return covered
+                return files
 
-        eyepiece = args.eyepiece or Path.home() / \
-            "projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece"
-        if not eyepiece.exists():
-            raise SystemExit(f"EyePiece binary not found: {eyepiece} (build OsmAnd-core first)")
-        obf_files = collect_obf_files(zoom=args.render_zoom)
-        print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
+            def embed_basemap(png_path: Path, image_georef):
+                grid = topo_map.gridBoundingBox
+                k = 1000.0 * topo_map.scale  # paper millimetres per ground metre
+                if image_georef is None:
+                    # No renderer georeference available: assume the raster covers
+                    # the grid frame exactly (legacy behaviour).
+                    e_tl, n_tl = grid.left, grid.top
+                    e_br, n_br = grid.right, grid.bottom
+                else:
+                    e_tl, n_tl, e_br, n_br = image_georef
+                width_mm = (e_br - e_tl) * k
+                height_mm = (n_tl - n_br) * k
+                rotated_map_size = np.array([width_mm, height_mm])
+                x_tl = (e_tl - grid.left) * k
+                y_tl = (grid.top - n_tl) * k
+                corners = [np.array([x_tl, y_tl]),
+                           np.array([x_tl + width_mm, y_tl]),
+                           np.array([x_tl + width_mm, y_tl + height_mm]),
+                           np.array([x_tl, y_tl + height_mm])]
+                topo_map.add_rendered_basemap(png_path, rotated_map_size, corners,
+                                              image_georef)
+                topo_map.draw_map()
+                svg_file = args.map_root / f"{args.name}.svg"
+                svg_file.write_text(str(topo_map.svg))
+                print(f"Map written to {svg_file}")
 
-        styles_dir = (args.render_style.parent if args.render_style
-                      else Path(__file__).parent / "styles")
-        # "Hiking.render.xml" -> style name "Hiking" (Path.stem only strips one
-        # suffix and would leave "Hiking.render", which EyePiece cannot resolve)
-        if args.render_style:
-            _style_file = args.render_style.name
-            if _style_file.endswith(".render.xml"):
-                _style_file = _style_file[:-len(".render.xml")]
-            style_name = _style_file
-        else:
-            style_name = "default"
-        if not (styles_dir / f"{style_name}.render.xml").exists():
-            raise SystemExit(f"Style '{style_name}.render.xml' not found in {styles_dir}")
+            bbox = topo_map.gridBoundingBox
+            px_per_m = topo_map.scale * args.dpi / 0.0254
+            width_px = int(round((bbox.right - bbox.left) * px_per_m))
+            height_px = int(round((bbox.top - bbox.bottom) * px_per_m))
 
-        # convert the print scale to an OsmAnd fractional zoom.
-        # The *style* is always laid out for a fixed 300 dpi reference view, so
-        # roads/labels/icons keep their 300 dpi physical size; higher target
-        # dpi is pure supersampling via -displayDensityFactor (and a matching
-        # -referenceTileSize so vector tiles stay crisp).
-        style_dpi = float(args.style_dpi)
-        center_lat, center_lon = bbox.center.to_latlon()
-        scale_denominator = int(args.scale.split(":")[1])
-        style_m_per_px = 25.4 / style_dpi * scale_denominator / 1000.0
-        m_per_px = 25.4 / args.dpi * scale_denominator / 1000.0
-        zoom = _math.log2(40075016.686 * _math.cos(_math.radians(center_lat))
-                          / (256.0 * style_m_per_px))
-        density = args.dpi / style_dpi
-        # Render north-up (like OsmAnd itself): the SVG grid carries the UTM
-        # convergence instead, rotated by tn2gn around the frame centre.
-        gam = topo_map.tn2gn
-        # ground extent that covers the rotated grid frame
-        w_rot = ((bbox.right - bbox.left) * _math.cos(abs(gam))
-                 + (bbox.top - bbox.bottom) * _math.sin(abs(gam)))
-        h_rot = ((bbox.top - bbox.bottom) * _math.cos(abs(gam))
-                 + (bbox.right - bbox.left) * _math.sin(abs(gam)))
-        # EyePiece treats -outputRasterWidth/Height as density-INDEPENDENT
-        # logical pixels and multiplies them by -displayDensityFactor, so the
-        # logical size is derived from the 300 dpi style base.
-        width_px = _math.ceil(w_rot / style_m_per_px)
-        height_px = _math.ceil(h_rot / style_m_per_px)
+        if args.mode == "render":
+            from render.style import RenderStyle
+            from render.renderer import Renderer, RenderOptions
 
-        env = dict(os.environ)
-        env["LD_LIBRARY_PATH"] = (str(eyepiece.parent) + ":" +
-                                  str(eyepiece.parent.parent.parent.parent / "core") +
-                                  ":" + env.get("LD_LIBRARY_PATH", ""))
+            style = RenderStyle()
+            style_path = args.render_style or Path(__file__).parent / "styles" / "default.render.xml"
+            style.load(style_path)
+            addon_path = args.style_addon or Path(__file__).parent / "styles" / "contourlines.addon.render.xml"
+            if addon_path and Path(addon_path).exists():
+                style.load(addon_path, addon=True)
 
-        png_base = args.map_root / f"{args.name}_core"
-        cmd = [
-            str(eyepiece),
-            *[f"-obfFile={p}" for p in obf_files],
-            f"-stylesPath={styles_dir}",
-            f"-styleName={style_name}",
-            f"-styleSetting:contourLines={args.contour_lines}",
-            f"-styleSetting:contourWidth={args.contour_width}",
-            f"-styleSetting:contourColorScheme={args.contour_color_scheme}",
-            f"-latLon={center_lat:.7f}:{center_lon:.7f}",
-            f"-zoom={zoom:.4f}",
-            "-elevationAngle=90",
-            f"-displayDensityFactor={density:.4f}",
-            f"-referenceTileSize={int(round(256.0 * density))}",
-            f"-outputRasterWidth={width_px}",
-            f"-outputRasterHeight={height_px}",
-            f"-outputImageFilename={png_base}",
-            "-outputImageFormat=png",
-        ]
-        geotiff_dir = args.geotiff_dir or (args.obf_dir / "geotiff")
-        if args.hillshade:
-            if not geotiff_dir.is_dir():
-                raise SystemExit(f"--hillshade needs a heightmap GeoTIFF directory: {geotiff_dir} not found")
-            cmd.append(f"-geotiffPath={geotiff_dir}")
-            cmd.append("-hillshade")
-            _hs = args.hillshade_colors or (Path(__file__).parent / "styles" / "hillshade_main.txt")
-            if _hs.exists():
-                cmd.append(f"-hillshadeColors={_hs}")
-            # Slope grayscale feeds the shade*slope blend of the hillshade;
-            # without it the overlay collapses to a uniform wash.
-            _slope = Path(__file__).parent / "styles" / "hillshade_slope.txt"
-            if _slope.exists():
-                cmd.append(f"-slopeColors={_slope}")
-            cmd.append(f"-hillshadeOpacity={args.hillshade_opacity}")
-        if args.map_language in ("user", "bilingual"):
-            cmd.append(f"-locale={args.user_lang}")
-        print(f"EyePiece zoom={zoom:.3f} north-up "
-              f"size={width_px}x{height_px}")
-        try:
-            subprocess.run(cmd, check=True, env=env)
-        except subprocess.CalledProcessError as exc:
-            # EyePiece sometimes crashes during shutdown, after the image
-            # has already been written - tolerate that
-            if not Path(f"{png_base}.png").exists():
-                raise SystemExit(f"EyePiece failed (exit {exc.returncode}) and "
-                                 f"produced no image") from exc
-            print(f"Warning: EyePiece exited with {exc.returncode} "
-                  f"(image was written successfully)")
+            obf_files = collect_obf_files()
+            print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
 
-        png_path = png_base.with_suffix(".png")
-        if not png_path.exists():
-            png_path = Path(f"{png_base}.png")
+            options = RenderOptions(
+                dpi=args.dpi,
+                zoom=args.render_zoom,
+                language=args.map_language,
+                user_lang=args.user_lang,
+                style_props={
+                    "contourLines": args.contour_lines,
+                    "contourWidth": args.contour_width,
+                    "contourColorScheme": args.contour_color_scheme,
+                },
+                stroke_scale=args.stroke_scale,
+                text_scale=args.text_scale,
+            )
+            result = Renderer(obf_files, style, options).render(
+                bbox, topo_map.scale, args.map_root / f"{args.name}_render.png")
+            print(f"Basemap rendered: {result.png_path} "
+                  f"({result.width_px}x{result.height_px}px, {result.stats})")
 
-        def read_georeference():
-            """UTM rectangle of the rendered raster, as reported by EyePiece."""
-            georef_file = Path(f"{png_base}.png.georef.json")
-            if not georef_file.exists():
-                return None
-            geo = json.loads(georef_file.read_text())
-            if not geo.get("valid"):
-                return None
-            corners = {corner["name"]: corner for corner in geo["corners"]}
-            e_tl, n_tl = utm.from_latlon(corners["topLeft"]["lat"],
-                                         corners["topLeft"]["lon"])[:2]
-            e_br, n_br = utm.from_latlon(corners["bottomRight"]["lat"],
-                                         corners["bottomRight"]["lon"])[:2]
-            return e_tl, n_tl, e_br, n_br
+            embed_basemap(result.png_path, result.width_px, result.height_px)
+            raise SystemExit(0)
 
-        image_georef = read_georeference()
-        if image_georef is not None:
-            # The renderer's fractional zoom is a few percent denser than the
-            # formula; enlarge the raster until it truly covers the grid frame.
-            e_tl, n_tl, e_br, n_br = image_georef
-            need_w = _math.ceil(width_px * w_rot / (e_br - e_tl))
-            need_h = _math.ceil(height_px * h_rot / (n_tl - n_br))
-            if need_w > width_px or need_h > height_px:
-                width_px, height_px = need_w, need_h
-                for index, part in enumerate(cmd):
-                    if part.startswith("-outputRasterWidth="):
-                        cmd[index] = f"-outputRasterWidth={width_px}"
-                    elif part.startswith("-outputRasterHeight="):
-                        cmd[index] = f"-outputRasterHeight={height_px}"
-                print(f"Re-rendering at {width_px}x{height_px}px so the "
-                      f"basemap covers the grid frame")
+        if args.mode == "core":
+            import math as _math
+            import os
+            import subprocess
+
+            eyepiece = args.eyepiece or Path.home() / \
+                "projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece"
+            if not eyepiece.exists():
+                raise SystemExit(f"EyePiece binary not found: {eyepiece} (build OsmAnd-core first)")
+            obf_files = collect_obf_files(zoom=args.render_zoom)
+            print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
+
+            styles_dir = (args.render_style.parent if args.render_style
+                          else Path(__file__).parent / "styles")
+            # "Hiking.render.xml" -> style name "Hiking" (Path.stem only strips one
+            # suffix and would leave "Hiking.render", which EyePiece cannot resolve)
+            if args.render_style:
+                _style_file = args.render_style.name
+                if _style_file.endswith(".render.xml"):
+                    _style_file = _style_file[:-len(".render.xml")]
+                style_name = _style_file
+            else:
+                style_name = "default"
+            if not (styles_dir / f"{style_name}.render.xml").exists():
+                raise SystemExit(f"Style '{style_name}.render.xml' not found in {styles_dir}")
+
+            # convert the print scale to an OsmAnd fractional zoom.
+            # The *style* is always laid out for a fixed 300 dpi reference view, so
+            # roads/labels/icons keep their 300 dpi physical size; higher target
+            # dpi is pure supersampling via -displayDensityFactor (and a matching
+            # -referenceTileSize so vector tiles stay crisp).
+            style_dpi = float(args.style_dpi)
+            center_lat, center_lon = bbox.center.to_latlon()
+            scale_denominator = int(args.scale.split(":")[1])
+            style_m_per_px = 25.4 / style_dpi * scale_denominator / 1000.0
+            m_per_px = 25.4 / args.dpi * scale_denominator / 1000.0
+            zoom = _math.log2(40075016.686 * _math.cos(_math.radians(center_lat))
+                              / (256.0 * style_m_per_px))
+            density = args.dpi / style_dpi
+            # Render north-up (like OsmAnd itself): the SVG grid carries the UTM
+            # convergence instead, rotated by tn2gn around the frame centre.
+            gam = topo_map.tn2gn
+            # ground extent that covers the rotated grid frame
+            w_rot = ((bbox.right - bbox.left) * _math.cos(abs(gam))
+                     + (bbox.top - bbox.bottom) * _math.sin(abs(gam)))
+            h_rot = ((bbox.top - bbox.bottom) * _math.cos(abs(gam))
+                     + (bbox.right - bbox.left) * _math.sin(abs(gam)))
+            # EyePiece treats -outputRasterWidth/Height as density-INDEPENDENT
+            # logical pixels and multiplies them by -displayDensityFactor, so the
+            # logical size is derived from the 300 dpi style base.
+            width_px = _math.ceil(w_rot / style_m_per_px)
+            height_px = _math.ceil(h_rot / style_m_per_px)
+
+            env = dict(os.environ)
+            env["LD_LIBRARY_PATH"] = (str(eyepiece.parent) + ":" +
+                                      str(eyepiece.parent.parent.parent.parent / "core") +
+                                      ":" + env.get("LD_LIBRARY_PATH", ""))
+
+            png_base = args.map_root / f"{args.name}_core"
+            cmd = [
+                str(eyepiece),
+                *[f"-obfFile={p}" for p in obf_files],
+                f"-stylesPath={styles_dir}",
+                f"-styleName={style_name}",
+                f"-styleSetting:contourLines={args.contour_lines}",
+                f"-styleSetting:contourWidth={args.contour_width}",
+                f"-styleSetting:contourColorScheme={args.contour_color_scheme}",
+                f"-latLon={center_lat:.7f}:{center_lon:.7f}",
+                f"-zoom={zoom:.4f}",
+                "-elevationAngle=90",
+                f"-displayDensityFactor={density:.4f}",
+                f"-referenceTileSize={int(round(256.0 * density))}",
+                f"-outputRasterWidth={width_px}",
+                f"-outputRasterHeight={height_px}",
+                f"-outputImageFilename={png_base}",
+                "-outputImageFormat=png",
+            ]
+            geotiff_dir = args.geotiff_dir or (args.obf_dir / "geotiff")
+            if args.hillshade:
+                if not geotiff_dir.is_dir():
+                    raise SystemExit(f"--hillshade needs a heightmap GeoTIFF directory: {geotiff_dir} not found")
+                cmd.append(f"-geotiffPath={geotiff_dir}")
+                cmd.append("-hillshade")
+                _hs = args.hillshade_colors or (Path(__file__).parent / "styles" / "hillshade_main.txt")
+                if _hs.exists():
+                    cmd.append(f"-hillshadeColors={_hs}")
+                # Slope grayscale feeds the shade*slope blend of the hillshade;
+                # without it the overlay collapses to a uniform wash.
+                _slope = Path(__file__).parent / "styles" / "hillshade_slope.txt"
+                if _slope.exists():
+                    cmd.append(f"-slopeColors={_slope}")
+                cmd.append(f"-hillshadeOpacity={args.hillshade_opacity}")
+            if args.map_language in ("user", "bilingual"):
+                cmd.append(f"-locale={args.user_lang}")
+            print(f"EyePiece zoom={zoom:.3f} north-up "
+                  f"size={width_px}x{height_px}")
+            try:
+                subprocess.run(cmd, check=True, env=env)
+            except subprocess.CalledProcessError as exc:
+                # EyePiece sometimes crashes during shutdown, after the image
+                # has already been written - tolerate that
+                if not Path(f"{png_base}.png").exists():
+                    raise SystemExit(f"EyePiece failed (exit {exc.returncode}) and "
+                                     f"produced no image") from exc
+                print(f"Warning: EyePiece exited with {exc.returncode} "
+                      f"(image was written successfully)")
+
+            png_path = png_base.with_suffix(".png")
+            if not png_path.exists():
+                png_path = Path(f"{png_base}.png")
+
+            def read_georeference():
+                """UTM rectangle of the rendered raster, as reported by EyePiece."""
+                georef_file = Path(f"{png_base}.png.georef.json")
+                if not georef_file.exists():
+                    return None
+                geo = json.loads(georef_file.read_text())
+                if not geo.get("valid"):
+                    return None
+                corners = {corner["name"]: corner for corner in geo["corners"]}
+                e_tl, n_tl = utm.from_latlon(corners["topLeft"]["lat"],
+                                             corners["topLeft"]["lon"])[:2]
+                e_br, n_br = utm.from_latlon(corners["bottomRight"]["lat"],
+                                             corners["bottomRight"]["lon"])[:2]
+                return e_tl, n_tl, e_br, n_br
+
+            image_georef = read_georeference()
+            if image_georef is not None:
+                # The renderer's fractional zoom is a few percent denser than the
+                # formula; enlarge the raster until it truly covers the grid frame.
+                e_tl, n_tl, e_br, n_br = image_georef
+                need_w = _math.ceil(width_px * w_rot / (e_br - e_tl))
+                need_h = _math.ceil(height_px * h_rot / (n_tl - n_br))
+                if need_w > width_px or need_h > height_px:
+                    width_px, height_px = need_w, need_h
+                    for index, part in enumerate(cmd):
+                        if part.startswith("-outputRasterWidth="):
+                            cmd[index] = f"-outputRasterWidth={width_px}"
+                        elif part.startswith("-outputRasterHeight="):
+                            cmd[index] = f"-outputRasterHeight={height_px}"
+                    print(f"Re-rendering at {width_px}x{height_px}px so the "
+                          f"basemap covers the grid frame")
+                    try:
+                        subprocess.run(cmd, check=True, env=env)
+                    except subprocess.CalledProcessError as exc:
+                        if not Path(f"{png_base}.png").exists():
+                            raise SystemExit(
+                                f"EyePiece failed on the coverage re-render "
+                                f"(exit {exc.returncode})")
+                        print(f"Warning: EyePiece exited with {exc.returncode} "
+                              f"(image was written successfully)")
+                    image_georef = read_georeference()
+
+            embed_basemap(png_path, image_georef)
+            raise SystemExit(0)
+
+        bounding_box = topo_map.gridBoundingBox
+        gpx_file = args.map_root / f"{args.name}.gpx"
+        topo_map.create_boundary_gpx(gpx_file)
+        print(f"Copy the {gpx_file} to OsmAnd")
+        print(f"Take the screenshots and save them into the directory: {args.map_root.absolute()}")
+        input("Press Enter to continue")
+        canvas = read_map(args.map_root)
+        corners = get_corners(canvas)
+        merged_image_file = args.map_root / f"{args.name}_merged.png"
+        # canvas = cv.imread(str(merged_image_file))
+        cv.imwrite(str(merged_image_file), canvas)
+        print(f"Map image saved to {merged_image_file.name}.")
+        top_left = corners[0]
+        top_right = corners[1]
+        bottom_right = corners[2]
+        bottom_left = corners[3]
+        while True:
+            print(f"Top-left: {top_left}, Top-right: {top_right}, Bottom-right: {bottom_right}, Bottom-left: {bottom_left}")
+            have_result = False
+            while True:
+                result = input("Is this correct? (y/n): ").strip().lower()
+                if result == 'y':
+                    have_result = True
+                    break
+                if result == 'n':
+                    break
+            if have_result:
+                break
+            while True:
+                top_left = input("Enter the top-left corner of the grid in merged_image_file (format: x,y): ")
                 try:
-                    subprocess.run(cmd, check=True, env=env)
-                except subprocess.CalledProcessError as exc:
-                    if not Path(f"{png_base}.png").exists():
-                        raise SystemExit(
-                            f"EyePiece failed on the coverage re-render "
-                            f"(exit {exc.returncode})")
-                    print(f"Warning: EyePiece exited with {exc.returncode} "
-                          f"(image was written successfully)")
-                image_georef = read_georeference()
-
-        embed_basemap(png_path, image_georef)
-        raise SystemExit(0)
-
-    bounding_box = topo_map.gridBoundingBox
-    gpx_file = args.map_root / f"{args.name}.gpx"
-    topo_map.create_boundary_gpx(gpx_file)
-    print(f"Copy the {gpx_file} to OsmAnd")
-    print(f"Take the screenshots and save them into the directory: {args.map_root.absolute()}")
-    input("Press Enter to continue")
-    canvas = read_map(args.map_root)
-    corners = get_corners(canvas)
-    merged_image_file = args.map_root / f"{args.name}_merged.png"
-    # canvas = cv.imread(str(merged_image_file))
-    cv.imwrite(str(merged_image_file), canvas)
-    print(f"Map image saved to {merged_image_file.name}.")
-    top_left = corners[0]
-    top_right = corners[1]
-    bottom_right = corners[2]
-    bottom_left = corners[3]
-    while True:
-        print(f"Top-left: {top_left}, Top-right: {top_right}, Bottom-right: {bottom_right}, Bottom-left: {bottom_left}")
-        have_result = False
-        while True:
-            result = input("Is this correct? (y/n): ").strip().lower()
-            if result == 'y':
-                have_result = True
-                break
-            if result == 'n':
-                break
-        if have_result:
-            break
-        while True:
-            top_left = input("Enter the top-left corner of the grid in merged_image_file (format: x,y): ")
-            try:
-                top_left = np.array(list(map(int, top_left.split(","))))
-                break
-            except ValueError:
-                continue
-        while True:
-            top_right = input("Enter the top-right corner of the grid in merged_image_file (format: x,y): ")
-            try:
-                top_right = np.array(list(map(int, top_right.split(","))))
-                if top_right[0] <= top_left[0]:
-                    print("Top-right corner must be to the right of corner.")
+                    top_left = np.array(list(map(int, top_left.split(","))))
+                    break
+                except ValueError:
                     continue
-                break
-            except ValueError:
-                continue
-        while True:
+            while True:
+                top_right = input("Enter the top-right corner of the grid in merged_image_file (format: x,y): ")
+                try:
+                    top_right = np.array(list(map(int, top_right.split(","))))
+                    if top_right[0] <= top_left[0]:
+                        print("Top-right corner must be to the right of corner.")
+                        continue
+                    break
+                except ValueError:
+                    continue
+            while True:
             
-            bottom_right = input("Enter the bottom-right corner of the grid in merged_image_file (format: x,y): ")
-            try:
-                bottom_right = np.array(list(map(int, bottom_right.split(","))))
-                if bottom_right[0] < top_left[0] or bottom_right[1] <= top_left[1]:
-                    print("Bottom-right corner must be to the right and below the top-left corner.")
+                bottom_right = input("Enter the bottom-right corner of the grid in merged_image_file (format: x,y): ")
+                try:
+                    bottom_right = np.array(list(map(int, bottom_right.split(","))))
+                    if bottom_right[0] < top_left[0] or bottom_right[1] <= top_left[1]:
+                        print("Bottom-right corner must be to the right and below the top-left corner.")
+                        continue
+                    break
+                except ValueError:
                     continue
-                break
-            except ValueError:
-                continue
 
-        while True:
+            while True:
                 
-            bottom_left = input("Enter the bottom-left corner of the grid in merged_image_file (format: x,y): ")
-            try:
-                bottom_left = tuple(map(int, bottom_left.split(",")))
-                if bottom_left[1] <= top_left[1]:
-                    print("Bottom-left corner must be below the top-left corner.")
+                bottom_left = input("Enter the bottom-left corner of the grid in merged_image_file (format: x,y): ")
+                try:
+                    bottom_left = tuple(map(int, bottom_left.split(",")))
+                    if bottom_left[1] <= top_left[1]:
+                        print("Bottom-left corner must be below the top-left corner.")
+                        continue
+                    break
+                except ValueError:
                     continue
-                break
-            except ValueError:
-                continue
 
-    top = min(top_left[1], bottom_left[1], top_right[1], bottom_right[1])
-    bottom = max( top_left[1], bottom_left[1], top_right[1], bottom_right[1])
-    left = min(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
-    right = max(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
-    canvas = canvas[top:bottom, left:right]
-    top_left = np.array([top_left[0] - left, top_left[1] - top])
-    top_right = np.array([top_right[0] - left, top_right[1] - top])
-    bottom_right = np.array([bottom_right[0] - left, bottom_right[1] - top])
-    bottom_left = np.array([bottom_left[0] - left, bottom_left[1] - top])
+        top = min(top_left[1], bottom_left[1], top_right[1], bottom_right[1])
+        bottom = max( top_left[1], bottom_left[1], top_right[1], bottom_right[1])
+        left = min(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
+        right = max(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
+        canvas = canvas[top:bottom, left:right]
+        top_left = np.array([top_left[0] - left, top_left[1] - top])
+        top_right = np.array([top_right[0] - left, top_right[1] - top])
+        bottom_right = np.array([bottom_right[0] - left, bottom_right[1] - top])
+        bottom_left = np.array([bottom_left[0] - left, bottom_left[1] - top])
 
-    topo_map.add_map(canvas, 
-        corners=[
-            top_left,
-            top_right,
-            bottom_right,
-            bottom_left
-        ]
-    )
-    topo_map.draw_map()
-    (args.map_root / f"{args.name}.svg").write_text(str(topo_map.svg))
+        topo_map.add_map(canvas, 
+            corners=[
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left
+            ]
+        )
+        topo_map.draw_map()
+        (args.map_root / f"{args.name}.svg").write_text(str(topo_map.svg))
 
 
 
@@ -1452,3 +1452,7 @@ if __name__ == "__main__":
 
 
 
+
+
+if __name__ == "__main__":
+    main()

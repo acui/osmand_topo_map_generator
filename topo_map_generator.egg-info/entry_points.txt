@@ -1,2 +1,0 @@
-[console_scripts]
-topo-map-generator = topo_map_generator:main

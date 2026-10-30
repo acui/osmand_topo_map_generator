@@ -6,3 +6,6 @@ __pycache__/
 /topomaps/
 .codebuddy/
 .venv/
+topo_map_generator.egg-info/
+build/
+dist/

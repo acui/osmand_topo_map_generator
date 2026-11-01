@@ -130,6 +130,7 @@ Notes:
 - `--contour_lines {disabled,16,15,14,13,12,11}` — minimum zoom to draw contour lines
 - `--contour_width {thin,medium,thick}`, `--contour_color_scheme brown` — contour appearance
 - `--render_style` — custom rendering style
+- `--hide boundaries,buildings,water` — comma-separated elements to hide (default: `boundaries`); raw `category="hide"` style attributes are also accepted, and `--hide none` disables all hiding
 - `--paper_size A4 --orientation portrait|landscape`
 - `--eyepiece PATH` — alternative EyePiece binary
 

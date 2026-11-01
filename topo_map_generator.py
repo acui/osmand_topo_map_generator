@@ -31,6 +31,47 @@ layouts = {
     }
 }
     
+HIDE_STYLE_ALIASES = {
+    "boundaries": "noAdminboundaries",
+    "polygons": "noPolygons",
+    "buildings": "hideBuildings",
+    "water": "hideWaterPolygons",
+    "house_numbers": "hideHouseNumbers",
+    "icons": "hideIcons",
+    "poi_labels": "hidePOILabels",
+    "underground": "hideUnderground",
+    "overground": "hideOverground",
+    "access": "hideAccess",
+    "military_areas": "hideMilitaryAreas",
+}
+
+
+def resolve_hide_style_settings(style_path: Path, requested: str) -> list[str]:
+    """Resolve comma-separated hide aliases against a style's supported properties."""
+    if requested.strip().lower() in ("", "none"):
+        return []
+    available = {
+        attr.lower(): attr
+        for attr in etree.parse(str(style_path)).xpath(
+            '/renderingStyle/renderingProperty[@category="hide"]/@attr')
+    }
+    settings = []
+    for item in requested.split(","):
+        key = item.strip().lower()
+        if not key:
+            continue
+        attr_name = HIDE_STYLE_ALIASES.get(key, key)
+        if attr_name.lower() not in available:
+            supported = ", ".join(sorted(available.values()))
+            raise ValueError(
+                f"Unsupported --hide element '{item.strip()}' for style '{style_path.name}'. "
+                f"Available hide attributes: {supported}")
+        attr_name = available[attr_name.lower()]
+        if attr_name not in settings:
+            settings.append(attr_name)
+    return settings
+
+
 def draw_star_path(radius: float) -> list[svg.PathData]:
     inner_radius = radius * (3 - math.sqrt(5)) / 2
     result = [svg.M(radius, 0)]
@@ -895,6 +936,9 @@ def main():
             user_lang: str = Field(default="zh", description="User language code for labels")
             render_style: Path | None = Field(
                 default=None, description="Custom render.xml (default: styles/default.render.xml)")
+            hide: str = Field(
+                default="boundaries",
+                description="Comma-separated elements to hide (boundaries, buildings, water, polygons, underground, overground, access, house_numbers, icons, poi_labels, military_areas) or raw style attributes; 'none' hides nothing")
             contour_lines: Literal["disabled", "16", "15", "14", "13", "12", "11"] = Field(
                 default="12", description="Minimum zoom to draw contour lines")
             contour_width: Literal["thin", "medium", "thick"] = Field(default="medium")
@@ -1058,8 +1102,13 @@ def main():
                 style_name = _style_file
             else:
                 style_name = "default"
-            if not (styles_dir / f"{style_name}.render.xml").exists():
+            style_path = styles_dir / f"{style_name}.render.xml"
+            if not style_path.exists():
                 raise SystemExit(f"Style '{style_name}.render.xml' not found in {styles_dir}")
+            try:
+                hide_settings = resolve_hide_style_settings(style_path, args.hide)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
 
             # convert the print scale to an OsmAnd fractional zoom.
             # The *style* is always laid out for a fixed 300 dpi reference view, so
@@ -1102,6 +1151,7 @@ def main():
                 f"-styleSetting:contourLines={args.contour_lines}",
                 f"-styleSetting:contourWidth={args.contour_width}",
                 f"-styleSetting:contourColorScheme={args.contour_color_scheme}",
+                *[f"-styleSetting:{setting}=true" for setting in hide_settings],
                 f"-latLon={center_lat:.7f}:{center_lon:.7f}",
                 f"-zoom={zoom:.4f}",
                 "-elevationAngle=90",

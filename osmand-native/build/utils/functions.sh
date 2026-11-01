@@ -39,7 +39,7 @@ function prepareUpstreamFromTarArchive {
 	local dir=$1
 	local url=$2
 	local stamp=$(_stampValue "$dir")
-	if [ -d "$dir/upstream" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
+	if [ -d "$dir/upstream" ] && [ -n "$(ls -A "$dir/upstream")" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
 		echo "$dir: upstream already prepared ($stamp)"
 		return 0
 	fi
@@ -72,7 +72,7 @@ function prepareUpstreamFromZipArchive {
 	local dir=$1
 	local url=$2
 	local stamp=$(_stampValue "$dir")
-	if [ -d "$dir/upstream" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
+	if [ -d "$dir/upstream" ] && [ -n "$(ls -A "$dir/upstream")" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
 		echo "$dir: upstream already prepared ($stamp)"
 		return 0
 	fi
@@ -100,7 +100,7 @@ function prepareUpstreamFromGit {
 	local repo=$2
 	local ref=$3
 	local stamp=$(_stampValue "$dir")
-	if [ -d "$dir/upstream" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
+	if [ -d "$dir/upstream" ] && [ -n "$(ls -A "$dir/upstream")" ] && [ "$stamp" != "#0" ] && [ -n "$stamp" ]; then
 		echo "$dir: upstream already prepared ($stamp)"
 		return 0
 	fi
@@ -122,6 +122,11 @@ function patchUpstream {
 	rm -rf "$dir/upstream.patched"
 	cp -R "$dir/upstream" "$dir/upstream.patched"
 	if [ -d "$dir/patches" ]; then
+		local patchScript
+		for patchScript in $(ls "$dir/patches/"*.sh 2>/dev/null | sort); do
+			echo "$dir: running $(basename "$patchScript")"
+			(cd "$dir/upstream.patched" && bash "$patchScript") || return 1
+		done
 		local patchFile
 		for patchFile in $(ls "$dir/patches/"*.patch 2>/dev/null | sort); do
 			echo "$dir: applying $(basename "$patchFile")"

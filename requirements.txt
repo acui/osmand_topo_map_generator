@@ -1,11 +1,7 @@
 lxml
 numpy
-opencv-python
-opencv-contrib-python
 pydantic-settings
 pygeomag
 pymap3d
 svg.py
-tqdm
 utm
-Pillow

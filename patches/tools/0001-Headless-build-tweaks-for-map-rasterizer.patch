@@ -4,15 +4,16 @@ Date: Fri, 30 Oct 2026 16:55:50 +0800
 Subject: [PATCH] Headless build tweaks for map-rasterizer
 
 ---
+
  cpp-tools/map-rasterizer/CMakeLists.txt  | 4 ----
- cpp-tools/map-rasterizer/main.cpp        | 5 +++++
+ cpp-tools/map-rasterizer/main.cpp        | 6 ++++++
  cpp-tools/map-viewer/CMakeLists.txt      | 4 ----
  cpp-tools/obf-inspector/CMakeLists.txt   | 4 ----
  cpp-tools/route-tester/CMakeLists.txt    | 4 ----
  cpp-tools/style-compiler/CMakeLists.txt  | 4 ----
  cpp-tools/style-evaluator/CMakeLists.txt | 4 ----
  cpp-tools/tools.cmake                    | 4 ++--
- 8 files changed, 7 insertions(+), 26 deletions(-)
+ 8 files changed, 8 insertions(+), 26 deletions(-)
 
 diff --git a/cpp-tools/map-rasterizer/CMakeLists.txt b/cpp-tools/map-rasterizer/CMakeLists.txt
 index 172347ab8..309194c37 100644
@@ -42,7 +43,7 @@ index 172347ab8..309194c37 100644
 -	link_entire_static_library(eyepiece_standalone OsmAndCore_ResourcesBundle_static)
  endif()
 diff --git a/cpp-tools/map-rasterizer/main.cpp b/cpp-tools/map-rasterizer/main.cpp
-index 3de7c1b2c..e124491bc 100644
+index 3de7c1b2c..83f0831b0 100644
 --- a/cpp-tools/map-rasterizer/main.cpp
 +++ b/cpp-tools/map-rasterizer/main.cpp
 @@ -12,6 +12,7 @@
@@ -64,6 +65,14 @@ index 3de7c1b2c..e124491bc 100644
      // Process rasterization request
      const auto success = OsmAndTools::EyePiece(configuration).rasterize();
  
+@@ -106,6 +111,7 @@ void printUsage(const std::string& warning /*= std::string()*/)
+     tcout << xT("\t[-displayDensityFactor=1.0]") << std::endl;
+     tcout << xT("\t[-noSymbols - no labels and icons, 94% faster per tile]") << std::endl;
+     tcout << xT("\t[-locale=en]") << std::endl;
++    tcout << xT("\t[-languagePreference=native|localized|bilingual]") << std::endl;
+     tcout << xT("\t[-verbose]") << std::endl;
+ #if defined(OSMAND_TARGET_OS_linux)
+     tcout << xT("\t[-useLegacyContext]") << std::endl;
 diff --git a/cpp-tools/map-viewer/CMakeLists.txt b/cpp-tools/map-viewer/CMakeLists.txt
 index fc2370e01..1b9edc738 100644
 --- a/cpp-tools/map-viewer/CMakeLists.txt
@@ -215,6 +224,3 @@ index fd29b84ef..2c92cff09 100644
 -add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/map-viewer" "tools/cpp-tools/map-viewer")
 +# 3D Map renderer (development) - skipped
 +# add_subdirectory("${OSMAND_ROOT}/tools/cpp-tools/map-viewer" "tools/cpp-tools/map-viewer")
--- 
-2.53.0
-

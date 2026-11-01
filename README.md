@@ -2,11 +2,7 @@
 
 Generate a printable 1:25000 topographic map poster (SVG/A4) from OsmAnd (https://osmand.net) data. The map uses the **true UTM grid** (rotated by the grid convergence, kilometre intersections matching GPS) and carries declination information for compass work.
 
-Three rendering modes are available:
-
-- **render** (default): offline rendering directly from OsmAnd `.obf` map data with a Python implementation of the OsmAnd rendering style (`render.xml`). No emulator or screenshots needed.
-- **core**: rendering through the **native OsmAnd engine** (`EyePiece`, the same C++/Skia renderer the phone app uses), driven off-screen. The engine exports a `.georef.json` (true lat/lon of the raster corners), and the SVG grid is drawn from that georeference — so grid intersections always land on the coordinates they label, independent of any renderer scale quirks.
-- **screenshots**: the legacy pipeline that stitches screenshots taken in OsmAnd (BlueStacks5 / Waydroid).
+Rendering is performed exclusively through the **native OsmAnd engine** (`EyePiece`, the same C++/Skia renderer the phone app uses), driven off-screen. The engine exports a `.georef.json` (true lat/lon of the raster corners), and the SVG grid is drawn from that georeference — so grid intersections always land on the coordinates they label, independent of any renderer scale quirks.
 
 ## Repository layout
 
@@ -16,8 +12,8 @@ changes ride along as a patch series that the build script applies:
 
 ```
 .                       # clone this one repo
-├── topo_map_generator.py   # CLI entry (modes: render / core / screenshots)
-├── obf/ render/ schemas/   # Python OBF reader, reference renderer, UTM helpers
+├── topo_map_generator.py   # CLI entry (native core rendering)
+├── obf/ schemas/           # OBF coverage filtering and UTM helpers
 ├── styles/                 # print render styles + hillshade palettes
 ├── patches/                # our modifications, as git-format-patch series
 │   ├── core/                   #   EyePiece georef export, hillshade, grids...
@@ -91,11 +87,11 @@ sudo mkdir -p /mnt/wd && sudo mount -o ro,loop <image path> /mnt/wd
 sudo find /mnt/wd -name "*.obf"
 ```
 
-## Usage (core mode, recommended)
+## Usage
 
 ```shell
 topo-map-generator 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背 \
-    --mode core --hillshade True --hillshade_opacity 0.39 \
+    --hillshade True --hillshade_opacity 0.39 \
     --dpi 1200 --orientation landscape \
     --render_style ~/osmand-data/rendering/Hiking.render.xml
 ```
@@ -133,36 +129,9 @@ Notes:
 - `--map_language {local,user,bilingual}` — label language; `--user_lang zh` selects the user language (default `zh`)
 - `--contour_lines {disabled,16,15,14,13,12,11}` — minimum zoom to draw contour lines
 - `--contour_width {thin,medium,thick}`, `--contour_color_scheme brown` — contour appearance
-- `--render_style`, `--style_addon` — custom rendering styles
-- `--stroke_scale`, `--text_scale` — global line width / label size multipliers
+- `--render_style` — custom rendering style
 - `--paper_size A4 --orientation portrait|landscape`
 - `--eyepiece PATH` — alternative EyePiece binary
-
-## Usage (offline render mode)
-
-```shell
-topo-map-generator 七王坟-凉水背 50T 420500 4437185 1:25000 topomaps/七王坟-凉水背
-```
-
-For the offline render mode, provide a CJK-capable font (e.g. Noto Sans CJK, auto-detected).
-The result is `<name>.svg` plus the rendered basemap `<name>_render.png`.
-
-## Usage (legacy screenshot mode)
-
-```shell
-topo-map-generator --mode screenshots --paper_size A4 --orientation portrait 富士山 54S 295102 3917080 1:25000 topomaps/富士山
-```
-
-It will generate a GPX file to the `topomaps/富士山`.
-
-Then import the `富士山.gpx` file into OsmAnd and take screenshots that overlapping and cover the whole region. The screenshots should be taken by using the arrow keys to follow a zigzag pattern.
-![Example](images/zigzag.png)
-
-Copy the screenshots to the `topomaps/富士山`. The program will merge all the screenshots and find 4 corners of the region. You could correct it and let the program generate the final map for you.
-
-Example result:
-
-![Example](images/example.jpg)
 
 ## Known Issues
 

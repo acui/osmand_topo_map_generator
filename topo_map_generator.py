@@ -1,4 +1,3 @@
-import cv2 as cv
 import json
 import utm
 import numpy as np
@@ -11,8 +10,6 @@ import datetime
 import pygeomag
 import svg
 import base64
-from tempfile import TemporaryDirectory
-from tqdm import tqdm
 from lxml import etree
 from schemas.layout import Layout
 from schemas.utm import UTMZoneLetter, UTMCoordinate, UTMBoundingBox
@@ -34,85 +31,6 @@ layouts = {
     }
 }
     
-def crop_screenshot(image):
-    # Crop the image to remove the top and bottom borders
-    # Working with BlueStacks 5
-    height, width = image.shape[:2]
-    return image[48:height-10, 0:width]
-
-def match_template(img, template, method=cv.TM_SQDIFF_NORMED):
-    h, w = template.shape  # Get the width and height of the template image
-    res = cv.matchTemplate(img, template, method)
-    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
-    # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take the minimum
-    if method in [cv.TM_SQDIFF, cv.TM_SQDIFF_NORMED]:
-        top_left = min_loc
-    else:
-        top_left = max_loc
-    bottom_right = (top_left[0] + w, top_left[1] + h)  # Calculate the bottom right corner of the rectangle
-    difference = img[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]].astype(np.int32) - template  # Calculate the difference between the matched area and the template
-    return(top_left, bottom_right, np.mean(difference))  # Return the coordinates of the rectangle
-
-def cluster_2d_points(points: np.ndarray, radius: float) -> list[list[np.ndarray]]:
-    clusters = []
-    visited = [False] * len(points)
-
-    for i in range(len(points)):
-        if visited[i]:
-            continue
-
-        # Start a new cluster
-        cluster = [points[i]]
-        visited[i] = True
-
-        # Check for all points to see if they are within the radius
-        for j in range(i + 1, len(points)):
-            if not visited[j]:
-                distance = np.linalg.norm(points[i][:2] - points[j][:2])
-                if distance <= radius:
-                    cluster.append(points[j])
-                    visited[j] = True
-
-        clusters.append(cluster)
-    return sorted(clusters, key=lambda c: len(c), reverse=True)
-
-def match_image(img1, img2, match_size):
-    # match the top border of img2
-    gimg1 = cv.cvtColor(img1, cv.COLOR_BGR2GRAY)
-    gimg2 = cv.cvtColor(img2, cv.COLOR_BGR2GRAY)
-    h, w, _ = img2.shape
-    translations = []
-    translations.append([[], 0])
-    for i in range(0, w, match_size):
-        top_left, bottom_right, diff = match_template(gimg1, gimg2[0:match_size, i:i+match_size])
-        if abs(diff) < 1.0:
-            translations[-1][0].append((top_left[0] - i, top_left[1], abs(diff)))
-    translations[-1][1] = len(translations[-1][0]) / (w // match_size)
-    translations.append([[], 0])
-    for i in range(0, w, match_size):
-        top_left, bottom_right, diff = match_template(gimg1, gimg2[h-match_size:h, i:i+match_size])
-        if abs(diff) < 1.0:
-            translations[-1][0].append((top_left[0] - i, top_left[1] - h + match_size, abs(diff)))
-    translations[-1][1] = len(translations[-1][0]) / (w // match_size)
-    translations.append([[], 0])
-    for i in range(0, h, match_size):
-        top_left, bottom_right, diff = match_template(gimg1, gimg2[i:i+match_size, 0:match_size])
-        if abs(diff) < 1.0:
-            translations[-1][0].append((top_left[0], top_left[1] - i, abs(diff)))
-    translations[-1][1] = len(translations[-1][0]) / (h // match_size)
-    translations.append([[], 0])
-    for i in range(0, h, match_size):
-        top_left, bottom_right, diff = match_template(gimg1, gimg2[i:i+match_size, w-match_size:w])
-        if abs(diff) < 1.0:
-            translations[-1][0].append((top_left[0] - w + match_size, top_left[1] - i, abs(diff)))
-    translations[-1][1] = len(translations[-1][0]) / (h // match_size)
-
-    translations.sort(key=lambda x: x[1], reverse=True)
-    result = np.array(translations[0][0])
-    result = cluster_2d_points(result, radius=2.0)[0]
-    result.sort(key=lambda x: x[2])
-    return result
-
 def draw_star_path(radius: float) -> list[svg.PathData]:
     inner_radius = radius * (3 - math.sqrt(5)) / 2
     result = [svg.M(radius, 0)]
@@ -120,44 +38,6 @@ def draw_star_path(radius: float) -> list[svg.PathData]:
         result.append(svg.L(inner_radius * math.cos(math.radians(angle)), inner_radius * math.sin(math.radians(angle))))
         result.append(svg.L(radius * math.cos(math.radians(angle + 36)), radius * math.sin(math.radians(angle + 36))))
     result.append(svg.Z())
-
-def read_map(map_root: Path) -> np.ndarray:
-    images = list(map_root.glob("Screenshot_*.png"))
-    images.sort()
-    imgs = [crop_screenshot(cv.imread(str(image))) for image in images]
-    regions = [np.array([0, 0, imgs[0].shape[1], imgs[0].shape[0]])]
-    for i in tqdm(range(1, len(imgs))):
-        img1 = imgs[i-1]
-        img2 = imgs[i]
-        h, w = img2.shape[:2]
-        translation = regions[i-1][:2] + match_image(img1, img2, 128)[0][:2].astype(np.int32)
-        regions.append(np.array([translation[0], translation[1], translation[0] + w, translation[1] + h]))
-    regions = np.array(regions)
-    left, top, right, bottom = regions[:, 0].min(), regions[:, 1].min(), regions[:, 2].max(), regions[:, 3].max()
-    canvas = np.zeros((bottom - top, right - left, 4), dtype=np.uint8)
-    for i in range(len(imgs)):
-        img = imgs[i]
-        region = regions[i]
-        canvas[region[1]-top:region[3]-top, region[0]-left:region[2]-left] = np.concatenate((img, np.full((img.shape[0], img.shape[1], 1), 255)), axis=2)  # Add alpha channel with full opacity
-    return canvas
-
-def get_corners(canvas: cv.typing.MatLike) -> list[np.ndarray]:
-    canvas_bgr = cv.cvtColor(canvas, cv.COLOR_BGRA2BGR)
-
-    hsv = cv.cvtColor(canvas_bgr, cv.COLOR_BGR2HSV)
-
-    lower_magenta = np.array([150, 160, 160])
-    upper_magenta = np.array([170, 255, 255])
-    mask = cv.inRange(hsv, lower_magenta, upper_magenta)
-    dst = cv.cornerHarris(mask, 4, 5, 0.04)
-    ys, xs = np.where(dst > 0.5 * dst.max())
-    positions = list(zip(xs, ys))
-    top_left = np.array(min(positions, key=lambda p: p[0] ** 2 + p[1] ** 2))
-    top_right = np.array(min(positions, key=lambda p: (p[0] - canvas.shape[1]) ** 2 + p[1] ** 2))
-    bottom_left = np.array(min(positions, key=lambda p: (p[1] - canvas.shape[0]) ** 2 + p[0] ** 2))
-    bottom_right = np.array(min(positions, key=lambda p: ((p[0] - canvas.shape[1]) ** 2 + (p[1] - canvas.shape[0]) ** 2)))
-
-    return [top_left, top_right, bottom_right, bottom_left]
 
 class TopoMap:
     def __init__(self, layout: Layout, label: str, center: UTMCoordinate, scale: Fraction = Fraction(1, 25000)):
@@ -209,9 +89,8 @@ class TopoMap:
         result = geo_mag.calculate(map_center_lat, map_center_lon, 0, decimal_year)
         self.declination = result.d
         self.scale = scale
-        # Rotation of the embedded basemap image relative to the UTM grid
-        # frame.  Screenshots are captured north-up (rotation == tn2gn);
-        # offline-rendered basemaps are already grid-aligned (rotation == 0).
+        # Rotation of the embedded basemap image relative to the UTM grid frame.
+        # Offline-rendered basemaps are already grid-aligned (rotation == 0).
         self.image_rotation: float | None = None
         # Geographic reference of the embedded basemap raster as reported by
         # the renderer: (easting_tl, northing_tl, easting_br, northing_br) in
@@ -246,18 +125,6 @@ class TopoMap:
         tree.append(track)
         tree.append(extensions)
         gpx_file.write_bytes(etree.tostring(tree, encoding="utf-8", xml_declaration=True, pretty_print=True))
-
-    def add_map(self, canvas: np.ndarray, corners: list[np.ndarray]) -> None:
-        image_width, image_height = canvas.shape[1], canvas.shape[0]
-        rotated_map_width = self.grid_size[0] * 1000 * 1000 * self.scale * abs(math.cos(self.tn2gn)) + self.grid_size[1] * 1000 * 1000 * self.scale * abs(math.sin(self.tn2gn))
-        rotated_map_height = rotated_map_width * image_height / image_width
-        self.rotated_map_size = np.array([rotated_map_width, rotated_map_height])
-        self.corners = [corner.astype(np.float32) / np.array([image_width, image_height]) * self.rotated_map_size for corner in corners]
-        with TemporaryDirectory() as temp_dir:
-            file_name = Path(temp_dir) / "temp_map.png"
-            cv.imwrite(str(file_name), canvas)
-            encoded_image = base64.b64encode(file_name.read_bytes()).decode('utf-8')
-            self.image_data = f"data:image/png;base64,{encoded_image}"
 
     def add_rendered_basemap(self, png_path: Path, rotated_map_size: np.ndarray,
                              corners: list[np.ndarray],
@@ -1009,42 +876,38 @@ def main():
             map_root: CliPositionalArg[Path] = Field(description="Root directory for the working directory")
             paper_size: Literal["A4"] = "A4"
             orientation: Literal["portrait", "landscape"] = "portrait"
-            mode: Literal["render", "core", "screenshots"] = Field(
-                default="render",
-                description="render: Python OBF renderer; core: OsmAnd-core (EyePiece) offscreen renderer; screenshots: legacy pipeline")
+            mode: Literal["core"] = Field(
+                default="core",
+                description="OsmAnd-core (EyePiece) offscreen renderer")
             eyepiece: Path | None = Field(
                 default=None,
-                description="Path to the EyePiece binary (core mode, default: ~/projects/osmand-native/build/tools/cpp-tools/map-rasterizer/eyepiece)")
+                description="Path to the EyePiece binary (default: in-tree osmand-native build)")
             obf_dir: Path = Field(
                 default=Path.home() / "osmand-data",
-                description="Directory with OsmAnd .obf files (render mode)")
-            dpi: int = Field(default=300, description="Basemap rendering resolution (render mode)")
+                description="Directory with OsmAnd .obf files")
+            dpi: int = Field(default=300, description="Basemap rendering resolution")
             style_dpi: float = Field(
                 default=300.0,
-                description="Base dpi that defines the physical size of roads/labels/icons; the target --dpi is supersampled from it (core mode)")
+                description="Base dpi that defines the physical size of roads/labels/icons; the target --dpi is supersampled from it")
             map_language: Literal["local", "user", "bilingual"] = Field(
                 default="user",
                 description="Label language: local names / user language / bilingual")
             user_lang: str = Field(default="zh", description="User language code for labels")
             render_style: Path | None = Field(
                 default=None, description="Custom render.xml (default: styles/default.render.xml)")
-            style_addon: Path | None = Field(
-                default=None, description="Addon render style (default: styles/contourlines.addon.render.xml)")
             contour_lines: Literal["disabled", "16", "15", "14", "13", "12", "11"] = Field(
                 default="12", description="Minimum zoom to draw contour lines")
             contour_width: Literal["thin", "medium", "thick"] = Field(default="medium")
             contour_color_scheme: str = Field(default="brown")
-            stroke_scale: float = Field(default=1.0, description="Line width multiplier")
-            text_scale: float = Field(default=1.0, description="Label size multiplier")
             render_zoom: int = Field(default=15, description="OBF query/render zoom")
-            hillshade: bool = Field(default=False, description="Add hillshade relief overlay (core mode)")
+            hillshade: bool = Field(default=False, description="Add hillshade relief overlay")
             hillshade_colors: Path | None = Field(default=None, description="Hillshade color ramp (default: styles/hillshade_topo.txt)")
             hillshade_opacity: float = Field(
                 default=0.39,
-                description="Hillshade layer visibility 0.0-1.0 (core mode, OsmAnd standard is 0.39)")
+                description="Hillshade layer visibility 0.0-1.0 (OsmAnd standard is 0.39)")
             geotiff_dir: Path | None = Field(
                 default=None,
-                description="Directory with heightmap GeoTIFFs (core mode, default: <obf_dir>/geotiff)")
+                description="Directory with heightmap GeoTIFFs (default: <obf_dir>/geotiff)")
         
             @field_validator("zone_number_letter", mode="after")
             @classmethod
@@ -1101,7 +964,7 @@ def main():
             Fraction(*map(int, args.scale.split(":")))
         )
 
-        if args.mode in ("render", "core"):
+        if args.mode == "core":
             def collect_obf_files(zoom: int | None = None):
                 files = sorted(
                     p for p in args.obf_dir.glob("*.obf")
@@ -1164,41 +1027,6 @@ def main():
             px_per_m = topo_map.scale * args.dpi / 0.0254
             width_px = int(round((bbox.right - bbox.left) * px_per_m))
             height_px = int(round((bbox.top - bbox.bottom) * px_per_m))
-
-        if args.mode == "render":
-            from render.style import RenderStyle
-            from render.renderer import Renderer, RenderOptions
-
-            style = RenderStyle()
-            style_path = args.render_style or Path(__file__).parent / "styles" / "default.render.xml"
-            style.load(style_path)
-            addon_path = args.style_addon or Path(__file__).parent / "styles" / "contourlines.addon.render.xml"
-            if addon_path and Path(addon_path).exists():
-                style.load(addon_path, addon=True)
-
-            obf_files = collect_obf_files()
-            print(f"Rendering from {len(obf_files)} OBF files in {args.obf_dir}")
-
-            options = RenderOptions(
-                dpi=args.dpi,
-                zoom=args.render_zoom,
-                language=args.map_language,
-                user_lang=args.user_lang,
-                style_props={
-                    "contourLines": args.contour_lines,
-                    "contourWidth": args.contour_width,
-                    "contourColorScheme": args.contour_color_scheme,
-                },
-                stroke_scale=args.stroke_scale,
-                text_scale=args.text_scale,
-            )
-            result = Renderer(obf_files, style, options).render(
-                bbox, topo_map.scale, args.map_root / f"{args.name}_render.png")
-            print(f"Basemap rendered: {result.png_path} "
-                  f"({result.width_px}x{result.height_px}px, {result.stats})")
-
-            embed_basemap(result.png_path, result.width_px, result.height_px)
-            raise SystemExit(0)
 
         if args.mode == "core":
             import math as _math
@@ -1299,6 +1127,12 @@ def main():
                 if _slope.exists():
                     cmd.append(f"-slopeColors={_slope}")
                 cmd.append(f"-hillshadeOpacity={args.hillshade_opacity}")
+            language_preference = {
+                "local": "native",
+                "user": "localized",
+                "bilingual": "bilingual",
+            }[args.map_language]
+            cmd.append(f"-languagePreference={language_preference}")
             if args.map_language in ("user", "bilingual"):
                 cmd.append(f"-locale={args.user_lang}")
             print(f"EyePiece zoom={zoom:.3f} north-up "
@@ -1363,95 +1197,7 @@ def main():
             embed_basemap(png_path, image_georef)
             raise SystemExit(0)
 
-        bounding_box = topo_map.gridBoundingBox
-        gpx_file = args.map_root / f"{args.name}.gpx"
-        topo_map.create_boundary_gpx(gpx_file)
-        print(f"Copy the {gpx_file} to OsmAnd")
-        print(f"Take the screenshots and save them into the directory: {args.map_root.absolute()}")
-        input("Press Enter to continue")
-        canvas = read_map(args.map_root)
-        corners = get_corners(canvas)
-        merged_image_file = args.map_root / f"{args.name}_merged.png"
-        # canvas = cv.imread(str(merged_image_file))
-        cv.imwrite(str(merged_image_file), canvas)
-        print(f"Map image saved to {merged_image_file.name}.")
-        top_left = corners[0]
-        top_right = corners[1]
-        bottom_right = corners[2]
-        bottom_left = corners[3]
-        while True:
-            print(f"Top-left: {top_left}, Top-right: {top_right}, Bottom-right: {bottom_right}, Bottom-left: {bottom_left}")
-            have_result = False
-            while True:
-                result = input("Is this correct? (y/n): ").strip().lower()
-                if result == 'y':
-                    have_result = True
-                    break
-                if result == 'n':
-                    break
-            if have_result:
-                break
-            while True:
-                top_left = input("Enter the top-left corner of the grid in merged_image_file (format: x,y): ")
-                try:
-                    top_left = np.array(list(map(int, top_left.split(","))))
-                    break
-                except ValueError:
-                    continue
-            while True:
-                top_right = input("Enter the top-right corner of the grid in merged_image_file (format: x,y): ")
-                try:
-                    top_right = np.array(list(map(int, top_right.split(","))))
-                    if top_right[0] <= top_left[0]:
-                        print("Top-right corner must be to the right of corner.")
-                        continue
-                    break
-                except ValueError:
-                    continue
-            while True:
-            
-                bottom_right = input("Enter the bottom-right corner of the grid in merged_image_file (format: x,y): ")
-                try:
-                    bottom_right = np.array(list(map(int, bottom_right.split(","))))
-                    if bottom_right[0] < top_left[0] or bottom_right[1] <= top_left[1]:
-                        print("Bottom-right corner must be to the right and below the top-left corner.")
-                        continue
-                    break
-                except ValueError:
-                    continue
 
-            while True:
-                
-                bottom_left = input("Enter the bottom-left corner of the grid in merged_image_file (format: x,y): ")
-                try:
-                    bottom_left = tuple(map(int, bottom_left.split(",")))
-                    if bottom_left[1] <= top_left[1]:
-                        print("Bottom-left corner must be below the top-left corner.")
-                        continue
-                    break
-                except ValueError:
-                    continue
-
-        top = min(top_left[1], bottom_left[1], top_right[1], bottom_right[1])
-        bottom = max( top_left[1], bottom_left[1], top_right[1], bottom_right[1])
-        left = min(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
-        right = max(top_left[0], bottom_left[0], top_right[0], bottom_right[0])
-        canvas = canvas[top:bottom, left:right]
-        top_left = np.array([top_left[0] - left, top_left[1] - top])
-        top_right = np.array([top_right[0] - left, top_right[1] - top])
-        bottom_right = np.array([bottom_right[0] - left, bottom_right[1] - top])
-        bottom_left = np.array([bottom_left[0] - left, bottom_left[1] - top])
-
-        topo_map.add_map(canvas, 
-            corners=[
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left
-            ]
-        )
-        topo_map.draw_map()
-        (args.map_root / f"{args.name}.svg").write_text(str(topo_map.svg))
 
 
 

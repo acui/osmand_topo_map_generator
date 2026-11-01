@@ -66,9 +66,10 @@ _FIELD_ID = 12
 class MapObject:
     """A decoded vector map object with geographic coordinates."""
 
-    points: list[tuple[float, float]]  # (lat, lon)
+    points: list[tuple[float, float]]  # (lat, lon), outer ring for polygons
     polygon: bool
     types: list[TagValuePair]
+    inner_rings: list[list[tuple[float, float]]] = field(default_factory=list)
     tags: dict[str, str] = field(default_factory=dict)
     additional_types: list[TagValuePair] = field(default_factory=list)
     osm_id: int = 0
@@ -456,8 +457,10 @@ class MapIndex:
         decoded_types = [t for t in (self.rules.decode_type(v) for v in types) if t]
         decoded_additional = [t for t in (self.rules.decode_type(v) for v in additional_types) if t]
         points = [(get31_latitude_y(y), get31_longitude_x(x)) for x, y in coords]
-        for ring in inner_rings:
-            points.extend((get31_latitude_y(y), get31_longitude_x(x)) for x, y in ring)
+        decoded_inner_rings = [
+            [(get31_latitude_y(y), get31_longitude_x(x)) for x, y in ring]
+            for ring in inner_rings
+        ]
         label_ll = None
         if label is not None:
             label_ll = (get31_latitude_y(label[1]), get31_longitude_x(label[0]))
@@ -466,6 +469,7 @@ class MapIndex:
             points=points,
             polygon=polygon,
             types=decoded_types,
+            inner_rings=decoded_inner_rings,
             additional_types=decoded_additional,
             osm_id=raw_id,
             label=label_ll,

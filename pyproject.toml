@@ -11,14 +11,11 @@ requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
 dependencies = [
   "numpy",
-  "opencv-python",
-  "Pillow",
   "pydantic>=2",
   "pydantic-settings",
   "pymap3d",
   "pygeomag",
   "svg.py",
-  "tqdm",
   "lxml",
   "utm",
 ]
@@ -27,7 +24,7 @@ dependencies = [
 topo-map-generator = "topo_map_generator:main"
 
 [tool.setuptools]
-packages = ["obf", "render", "schemas", "wmm"]
+packages = ["obf", "schemas", "wmm"]
 py-modules = ["topo_map_generator"]
 
 [tool.setuptools.package-data]

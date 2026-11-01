@@ -13,19 +13,20 @@ Subject: [PATCH] EyePiece print-rendering patches for topo map generation
 - Frame loop: hold renderer idle ~3s in single-raster mode (cold-start
   captures used to grab stub tiles); tolerate shutdown segfault
 ---
+
  include/OsmAndCore/Map/MapRendererTypes.h |   2 +-
  src/GeoTiffCollection_P.cpp               |   6 +-
  src/ICoreResourcesProvider.cpp            |  10 +-
  src/Map/MapRenderer.cpp                   |   2 +
- src/Map/MapRendererResourcesManager.cpp   |   8 +
+ src/Map/MapRendererResourcesManager.cpp   |   8 ++
  src/Map/MapRendererTypes.cpp              |   1 +
  src/ObfsCollection_P.cpp                  |   6 +-
- tools/include/OsmAndCoreTools/EyePiece.h  |  14 ++
- tools/src/EyePiece.cpp                    | 193 +++++++++++++++++++++-
- 9 files changed, 230 insertions(+), 12 deletions(-)
+ tools/include/OsmAndCoreTools/EyePiece.h  |  15 ++
+ tools/src/EyePiece.cpp                    | 221 +++++++++++++++++++++++++++++-
+ 9 files changed, 259 insertions(+), 12 deletions(-)
 
 diff --git a/include/OsmAndCore/Map/MapRendererTypes.h b/include/OsmAndCore/Map/MapRendererTypes.h
-index 5363df588..e530c5429 100644
+index 5363df58..e530c542 100644
 --- a/include/OsmAndCore/Map/MapRendererTypes.h
 +++ b/include/OsmAndCore/Map/MapRendererTypes.h
 @@ -552,7 +552,7 @@ namespace OsmAnd
@@ -38,7 +39,7 @@ index 5363df588..e530c5429 100644
              PointD* refLons = nullptr, PointD* refLats = nullptr) const;
          double correctGap(const Projection projection, const double gap) const;
 diff --git a/src/GeoTiffCollection_P.cpp b/src/GeoTiffCollection_P.cpp
-index f07e890b4..61797648c 100644
+index f07e890b..61797648 100644
 --- a/src/GeoTiffCollection_P.cpp
 +++ b/src/GeoTiffCollection_P.cpp
 @@ -516,8 +516,10 @@ inline bool OsmAnd::GeoTiffCollection_P::postProcess(
@@ -55,7 +56,7 @@ index f07e890b4..61797648c 100644
                              const_cast<char **>(hillshadeArgs), NULL))
                          {
 diff --git a/src/ICoreResourcesProvider.cpp b/src/ICoreResourcesProvider.cpp
-index 4168dc6ee..d01910bc1 100644
+index 4168dc6e..d01910bc 100644
 --- a/src/ICoreResourcesProvider.cpp
 +++ b/src/ICoreResourcesProvider.cpp
 @@ -20,11 +20,17 @@ sk_sp<SkImage> OsmAnd::ICoreResourcesProvider::getResourceAsImage(
@@ -79,7 +80,7 @@ index 4168dc6ee..d01910bc1 100644
  
  sk_sp<SkImage> OsmAnd::ICoreResourcesProvider::getResourceAsImage(const QString& name) const
 diff --git a/src/Map/MapRenderer.cpp b/src/Map/MapRenderer.cpp
-index d1a052381..1e6460870 100644
+index d1a05238..1e646087 100644
 --- a/src/Map/MapRenderer.cpp
 +++ b/src/Map/MapRenderer.cpp
 @@ -406,7 +406,9 @@ bool OsmAnd::MapRenderer::initializeRendering(bool fresh /* = true */)
@@ -93,7 +94,7 @@ index d1a052381..1e6460870 100644
      if (!_isRenderingInitialized)
      {
 diff --git a/src/Map/MapRendererResourcesManager.cpp b/src/Map/MapRendererResourcesManager.cpp
-index c484f1b26..697fd66c4 100644
+index c484f1b2..697fd66c 100644
 --- a/src/Map/MapRendererResourcesManager.cpp
 +++ b/src/Map/MapRendererResourcesManager.cpp
 @@ -160,7 +160,9 @@ bool OsmAnd::MapRendererResourcesManager::initializeTileStub(
@@ -137,7 +138,7 @@ index c484f1b26..697fd66c4 100644
      outResource = resource;
      return true;
 diff --git a/src/Map/MapRendererTypes.cpp b/src/Map/MapRendererTypes.cpp
-index d3da8df1e..5188fad1a 100644
+index d3da8df1..5188fad1 100644
 --- a/src/Map/MapRendererTypes.cpp
 +++ b/src/Map/MapRendererTypes.cpp
 @@ -322,6 +322,7 @@ OsmAnd::GridConfiguration& OsmAnd::GridConfiguration::setProjectionConstants(
@@ -149,7 +150,7 @@ index d3da8df1e..5188fad1a 100644
      return *this;
  }
 diff --git a/src/ObfsCollection_P.cpp b/src/ObfsCollection_P.cpp
-index 505b76f76..3777d434a 100644
+index 505b76f7..3777d434 100644
 --- a/src/ObfsCollection_P.cpp
 +++ b/src/ObfsCollection_P.cpp
 @@ -193,6 +193,10 @@ void OsmAnd::ObfsCollection_P::collectSources() const
@@ -173,12 +174,14 @@ index 505b76f76..3777d434a 100644
      if (indCache)
          delete indCache;
 diff --git a/tools/include/OsmAndCoreTools/EyePiece.h b/tools/include/OsmAndCoreTools/EyePiece.h
-index 8dce650da..53d67fee7 100644
+index 8dce650d..76125720 100644
 --- a/tools/include/OsmAndCoreTools/EyePiece.h
 +++ b/tools/include/OsmAndCoreTools/EyePiece.h
-@@ -71,6 +71,20 @@ namespace OsmAndTools
+@@ -70,7 +70,22 @@ namespace OsmAndTools
+             float mapScale;
              float symbolsScale;
              QString locale;
++            QString languagePreference;
              bool noSymbols = false;
 +            bool hillshade = false;
 +            QString hillshadeColors;
@@ -198,7 +201,7 @@ index 8dce650da..53d67fee7 100644
  #if defined(OSMAND_TARGET_OS_linux)
              bool useLegacyContext;
 diff --git a/tools/src/EyePiece.cpp b/tools/src/EyePiece.cpp
-index cc33e40cd..6878eb207 100644
+index cc33e40c..baf0ad08 100644
 --- a/tools/src/EyePiece.cpp
 +++ b/tools/src/EyePiece.cpp
 @@ -6,6 +6,9 @@
@@ -237,7 +240,29 @@ index cc33e40cd..6878eb207 100644
          GLX_DRAWABLE_TYPE, GLX_PBUFFER_BIT,
          GLX_RENDER_TYPE, GLX_RGBA_BIT,
          GLX_RED_SIZE, 8,
-@@ -1034,10 +1038,85 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -945,6 +949,21 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+             configuration.mapScale,
+             configuration.symbolsScale));
+         mapPresentationEnvironment->setLocaleLanguageId(configuration.locale);
++        if (configuration.languagePreference == QLatin1String("native"))
++        {
++            mapPresentationEnvironment->setLanguagePreference(
++                OsmAnd::MapPresentationEnvironment::LanguagePreference::NativeOnly);
++        }
++        else if (configuration.languagePreference == QLatin1String("bilingual"))
++        {
++            mapPresentationEnvironment->setLanguagePreference(
++                OsmAnd::MapPresentationEnvironment::LanguagePreference::NativeAndLocalized);
++        }
++        else
++        {
++            mapPresentationEnvironment->setLanguagePreference(
++                OsmAnd::MapPresentationEnvironment::LanguagePreference::LocalizedOrNative);
++        }
+ 
+         if (configuration.verbose)
+             output << xT("Applying extra style settings to map presentation environment...") << std::endl;
+@@ -1034,10 +1053,85 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
              mapRenderer->addSymbolsProvider(binaryMapStaticSymbolProvider);
          mapRenderer->setMapLayerProvider(0, binaryMapRasterTileProvider);
  
@@ -324,7 +349,7 @@ index cc33e40cd..6878eb207 100644
          // Initialize rendering
          if (configuration.verbose)
              output << xT("Initializing rendering...") << std::endl;
-@@ -1118,9 +1197,14 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -1118,9 +1212,14 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
          int tileZoom = 0;
          int64_t tileX = 0;
          int64_t tileY = 0;
@@ -342,7 +367,7 @@ index cc33e40cd..6878eb207 100644
          auto idleConfirmations = 0u;
          for (;; framesCounter++)
          {
-@@ -1314,6 +1398,59 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -1314,6 +1413,59 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
                  }
              }
  
@@ -402,7 +427,34 @@ index cc33e40cd..6878eb207 100644
              if (!configuration.outputJSONFilename.isEmpty())
              {
                  auto fileName = configuration.outputJSONFilename;
-@@ -1992,6 +2129,50 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+@@ -1512,6 +1664,7 @@ OsmAndTools::EyePiece::Configuration::Configuration()
+     , mapScale(1.0f)
+     , symbolsScale(1.0f)
+     , locale(QLatin1String("en"))
++    , languagePreference(QLatin1String("localized"))
+     , verbose(false)
+ #if defined(OSMAND_TARGET_OS_linux)
+     , useLegacyContext(false)
+@@ -1958,6 +2111,18 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+ 
+             outConfiguration.locale = value;
+         }
++        else if (arg.startsWith(QLatin1String("-languagePreference=")))
++        {
++            const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-languagePreference=")));
++            if (value != QLatin1String("native") && value != QLatin1String("localized") &&
++                value != QLatin1String("bilingual"))
++            {
++                outError = QString("'%1' is not a valid language preference (native, localized or bilingual)").arg(value);
++                return false;
++            }
++
++            outConfiguration.languagePreference = value;
++        }
+         else if (arg.startsWith(QLatin1String("-tiles=")))
+         {
+             const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-tiles=")));
+@@ -1992,6 +2157,50 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
          {
              outConfiguration.noSymbols = true;
          }
@@ -453,6 +505,3 @@ index cc33e40cd..6878eb207 100644
          else if (arg == QLatin1String("-verbose"))
          {
              outConfiguration.verbose = true;
--- 
-2.53.0
-

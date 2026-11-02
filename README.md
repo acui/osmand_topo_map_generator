@@ -141,5 +141,6 @@ Notes:
 
 ## License
 
-The source in this repository falls under an MIT license (see LICENSE).
+The original source in this repository is licensed under the GNU General
+Public License v3.0 or later (`GPL-3.0-or-later`); see `LICENSE`.
 OsmAnd core/tools (the `osmand-native` submodule) keep their upstream licenses.

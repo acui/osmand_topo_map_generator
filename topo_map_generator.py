@@ -920,6 +920,9 @@ def main():
             mode: Literal["core"] = Field(
                 default="core",
                 description="OsmAnd-core (EyePiece) offscreen renderer")
+            projection: Literal["mercator", "spherical"] = Field(
+                default="spherical",
+                description="OsmAnd map projection: flat Web Mercator or spherical Earth")
             eyepiece: Path | None = Field(
                 default=None,
                 description="Path to the EyePiece binary (default: in-tree osmand-native build)")
@@ -1155,6 +1158,7 @@ def main():
                 f"-latLon={center_lat:.7f}:{center_lon:.7f}",
                 f"-zoom={zoom:.4f}",
                 "-elevationAngle=90",
+                f"-projection={args.projection}",
                 f"-displayDensityFactor={density:.4f}",
                 f"-referenceTileSize={int(round(256.0 * density))}",
                 f"-outputRasterWidth={width_px}",

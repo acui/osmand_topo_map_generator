@@ -132,6 +132,7 @@ Notes:
 - `--render_style` — custom rendering style
 - `--hide boundaries,buildings,water` — comma-separated elements to hide (default: `boundaries`); raw `category="hide"` style attributes are also accepted, and `--hide none` disables all hiding
 - `--paper_size A4 --orientation portrait|landscape`
+- `--projection {mercator,spherical}` — map rendering projection (default: `spherical`)
 - `--eyepiece PATH` — alternative EyePiece binary
 
 ## Known Issues

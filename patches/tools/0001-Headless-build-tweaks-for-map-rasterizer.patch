@@ -1,20 +1,3 @@
-From ad3d693ddf53d267ba93639019ed7d4a20c41df5 Mon Sep 17 00:00:00 2001
-From: Cui Yuting <yutingcui@gmail.com>
-Date: Fri, 30 Oct 2026 16:55:50 +0800
-Subject: [PATCH] Headless build tweaks for map-rasterizer
-
----
-
- cpp-tools/map-rasterizer/CMakeLists.txt  | 4 ----
- cpp-tools/map-rasterizer/main.cpp        | 6 ++++++
- cpp-tools/map-viewer/CMakeLists.txt      | 4 ----
- cpp-tools/obf-inspector/CMakeLists.txt   | 4 ----
- cpp-tools/route-tester/CMakeLists.txt    | 4 ----
- cpp-tools/style-compiler/CMakeLists.txt  | 4 ----
- cpp-tools/style-evaluator/CMakeLists.txt | 4 ----
- cpp-tools/tools.cmake                    | 4 ++--
- 8 files changed, 8 insertions(+), 26 deletions(-)
-
 diff --git a/cpp-tools/map-rasterizer/CMakeLists.txt b/cpp-tools/map-rasterizer/CMakeLists.txt
 index 172347ab8..309194c37 100644
 --- a/cpp-tools/map-rasterizer/CMakeLists.txt
@@ -43,7 +26,7 @@ index 172347ab8..309194c37 100644
 -	link_entire_static_library(eyepiece_standalone OsmAndCore_ResourcesBundle_static)
  endif()
 diff --git a/cpp-tools/map-rasterizer/main.cpp b/cpp-tools/map-rasterizer/main.cpp
-index 3de7c1b2c..83f0831b0 100644
+index 3de7c1b2c..216ac436f 100644
 --- a/cpp-tools/map-rasterizer/main.cpp
 +++ b/cpp-tools/map-rasterizer/main.cpp
 @@ -12,6 +12,7 @@
@@ -65,7 +48,15 @@ index 3de7c1b2c..83f0831b0 100644
      // Process rasterization request
      const auto success = OsmAndTools::EyePiece(configuration).rasterize();
  
-@@ -106,6 +111,7 @@ void printUsage(const std::string& warning /*= std::string()*/)
+@@ -96,6 +101,7 @@ void printUsage(const std::string& warning /*= std::string()*/)
+     tcout << xT("\t[-zoom=15]") << std::endl;
+     tcout << xT("\t[-azimuth=0]") << std::endl;
+     tcout << xT("\t[-elevationAngle=90]") << std::endl;
++    tcout << xT("\t[-projection=mercator|spherical (default: spherical)]") << std::endl;
+     tcout << xT("\t[-frames=1 (>1 to animate)]") << std::endl;
+     tcout << xT("\t[-endLatLon=46.95:7.45 or -endTarget31=x:y (when animated)]") << std::endl;
+     tcout << xT("\t[-endZoom=15 (when animated)]") << std::endl;
+@@ -106,6 +112,7 @@ void printUsage(const std::string& warning /*= std::string()*/)
      tcout << xT("\t[-displayDensityFactor=1.0]") << std::endl;
      tcout << xT("\t[-noSymbols - no labels and icons, 94% faster per tile]") << std::endl;
      tcout << xT("\t[-locale=en]") << std::endl;

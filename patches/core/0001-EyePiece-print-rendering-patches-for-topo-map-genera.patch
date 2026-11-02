@@ -1,30 +1,3 @@
-From ded01e59daba4072f14d08aa54b54fdb0f1d2b90 Mon Sep 17 00:00:00 2001
-From: Cui Yuting <yutingcui@gmail.com>
-Date: Fri, 30 Oct 2026 16:55:47 +0800
-Subject: [PATCH] EyePiece print-rendering patches for topo map generation
-
-- Export raster georeference: true corner lat/lon via
-  getLocationFromScreenPoint -> <image>.georef.json
-- Hillshade: expose -slopeColors (shade*slope blend fix); OsmAnd standard
-  hillshade_main/hillshade_color palettes work with gdaldem; drop the
-  hardcoded -z 2 vertical exaggeration
-- Coordinate grid: -primaryGrid=utm|wgs84 + granularity gate fix
-- Elevation/3D relief off unless -elevation (displacement warped rasters)
-- Frame loop: hold renderer idle ~3s in single-raster mode (cold-start
-  captures used to grab stub tiles); tolerate shutdown segfault
----
-
- include/OsmAndCore/Map/MapRendererTypes.h |   2 +-
- src/GeoTiffCollection_P.cpp               |   6 +-
- src/ICoreResourcesProvider.cpp            |  10 +-
- src/Map/MapRenderer.cpp                   |   2 +
- src/Map/MapRendererResourcesManager.cpp   |   8 ++
- src/Map/MapRendererTypes.cpp              |   1 +
- src/ObfsCollection_P.cpp                  |   6 +-
- tools/include/OsmAndCoreTools/EyePiece.h  |  15 ++
- tools/src/EyePiece.cpp                    | 221 +++++++++++++++++++++++++++++-
- 9 files changed, 259 insertions(+), 12 deletions(-)
-
 diff --git a/include/OsmAndCore/Map/MapRendererTypes.h b/include/OsmAndCore/Map/MapRendererTypes.h
 index 5363df58..e530c542 100644
 --- a/include/OsmAndCore/Map/MapRendererTypes.h
@@ -174,10 +147,19 @@ index 505b76f7..3777d434 100644
      if (indCache)
          delete indCache;
 diff --git a/tools/include/OsmAndCoreTools/EyePiece.h b/tools/include/OsmAndCoreTools/EyePiece.h
-index 8dce650d..76125720 100644
+index 8dce650d..4931f716 100644
 --- a/tools/include/OsmAndCoreTools/EyePiece.h
 +++ b/tools/include/OsmAndCoreTools/EyePiece.h
-@@ -70,7 +70,22 @@ namespace OsmAndTools
+@@ -59,6 +59,8 @@ namespace OsmAndTools
+             float zoom;
+             float azimuth;
+             float elevationAngle;
++            /** Flat Web Mercator when true, spherical Earth when false. */
++            bool flatEarth = false;
+             unsigned int frames;
+             OsmAnd::PointI endTarget31;
+             float endZoom;
+@@ -70,7 +72,22 @@ namespace OsmAndTools
              float mapScale;
              float symbolsScale;
              QString locale;
@@ -201,7 +183,7 @@ index 8dce650d..76125720 100644
  #if defined(OSMAND_TARGET_OS_linux)
              bool useLegacyContext;
 diff --git a/tools/src/EyePiece.cpp b/tools/src/EyePiece.cpp
-index cc33e40c..baf0ad08 100644
+index cc33e40c..8ec269bc 100644
 --- a/tools/src/EyePiece.cpp
 +++ b/tools/src/EyePiece.cpp
 @@ -6,6 +6,9 @@
@@ -262,7 +244,15 @@ index cc33e40c..baf0ad08 100644
  
          if (configuration.verbose)
              output << xT("Applying extra style settings to map presentation environment...") << std::endl;
-@@ -1034,10 +1053,85 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -1009,6 +1028,7 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+         const auto mapRendererConfiguration = std::static_pointer_cast<OsmAnd::AtlasMapRendererConfiguration>(mapRenderer->getConfiguration());
+         mapRendererConfiguration->referenceTileSizeOnScreenInPixels = configuration.referenceTileSize;
+         mapRenderer->setConfiguration(mapRendererConfiguration);
++        mapRenderer->setFlatEarth(configuration.flatEarth);
+         mapRenderer->setFieldOfView(configuration.fov);
+         mapRenderer->setWindowSize(OsmAnd::PointI(configuration.outputRasterWidth, configuration.outputRasterHeight));
+         mapRenderer->setViewport(OsmAnd::AreaI(0, 0, configuration.outputRasterHeight, configuration.outputRasterWidth));
+@@ -1034,10 +1054,85 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
              mapRenderer->addSymbolsProvider(binaryMapStaticSymbolProvider);
          mapRenderer->setMapLayerProvider(0, binaryMapRasterTileProvider);
  
@@ -349,7 +339,7 @@ index cc33e40c..baf0ad08 100644
          // Initialize rendering
          if (configuration.verbose)
              output << xT("Initializing rendering...") << std::endl;
-@@ -1118,9 +1212,14 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -1118,9 +1213,14 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
          int tileZoom = 0;
          int64_t tileX = 0;
          int64_t tileY = 0;
@@ -367,7 +357,7 @@ index cc33e40c..baf0ad08 100644
          auto idleConfirmations = 0u;
          for (;; framesCounter++)
          {
-@@ -1314,6 +1413,59 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
+@@ -1314,6 +1414,59 @@ bool OsmAndTools::EyePiece::rasterize(std::ostream& output)
                  }
              }
  
@@ -427,7 +417,7 @@ index cc33e40c..baf0ad08 100644
              if (!configuration.outputJSONFilename.isEmpty())
              {
                  auto fileName = configuration.outputJSONFilename;
-@@ -1512,6 +1664,7 @@ OsmAndTools::EyePiece::Configuration::Configuration()
+@@ -1512,6 +1665,7 @@ OsmAndTools::EyePiece::Configuration::Configuration()
      , mapScale(1.0f)
      , symbolsScale(1.0f)
      , locale(QLatin1String("en"))
@@ -435,7 +425,31 @@ index cc33e40c..baf0ad08 100644
      , verbose(false)
  #if defined(OSMAND_TARGET_OS_linux)
      , useLegacyContext(false)
-@@ -1958,6 +2111,18 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+@@ -1783,6 +1937,23 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+                 return false;
+             }
+         }
++        else if (arg.startsWith(QLatin1String("-projection=")))
++        {
++            const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-projection="))).toLower();
++            if (value == QLatin1String("mercator"))
++            {
++                outConfiguration.flatEarth = true;
++            }
++            else if (value == QLatin1String("spherical"))
++            {
++                outConfiguration.flatEarth = false;
++            }
++            else
++            {
++                outError = QString("'%1' is not a valid projection (mercator or spherical)").arg(value);
++                return false;
++            }
++        }
+         else if (arg.startsWith(QLatin1String("-frames=")))
+         {
+             const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-frames=")));
+@@ -1958,6 +2129,18 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
  
              outConfiguration.locale = value;
          }
@@ -454,7 +468,7 @@ index cc33e40c..baf0ad08 100644
          else if (arg.startsWith(QLatin1String("-tiles=")))
          {
              const auto value = Utilities::purifyArgumentValue(arg.mid(strlen("-tiles=")));
-@@ -1992,6 +2157,50 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
+@@ -1992,6 +2175,50 @@ bool OsmAndTools::EyePiece::Configuration::parseFromCommandLineArguments(
          {
              outConfiguration.noSymbols = true;
          }

@@ -558,7 +558,21 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 							current31.getY() + wanted31.getY() - actual31.getY()));
 				}
 			}
-			mainHandler.postDelayed(() -> captureNow(attempt + 1), CAPTURE_RETRY_DELAY_MS);
+			mainHandler.postDelayed(() -> {
+				// The nudge above can shift the viewport onto unloaded
+				// territory: its tile and label batches only start loading
+				// now. Capturing on a fixed timer raced the loader — the
+				// raycast gates pass without map data, so the capture went
+				// through while the last-loaded batches (top/left of the
+				// raster) were still empty. Wait for real quiescence (frames
+				// quiet AND the renderer idle) before the next gate, off the
+				// UI thread.
+				Thread waiter = new Thread(() -> {
+					waitForStable(SystemClock.uptimeMillis() + FRAME_WAIT_TIMEOUT_MS);
+					app.runInUIThread(() -> captureNow(attempt + 1));
+				}, "TopoPrintGateStabilize");
+				waiter.start();
+			}, CAPTURE_RETRY_DELAY_MS);
 			return;
 		}
 		// Verified window: a self-consistent burst (centre before and after the

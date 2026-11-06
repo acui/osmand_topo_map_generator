@@ -9,27 +9,63 @@ This branch (`osmand_plugin`) holds the plugin's canonical sources. It is
 consumed by the OsmAnd 5.4 workspace as a git submodule
 (`plugins/Osmand-TopoPrintPlugin`).
 
+## Setting up the build environment
+
+1. **JDK 17**:
+
+   ```bash
+   sudo apt install openjdk-17-jdk        # Debian/Ubuntu
+   ```
+
+2. **Android SDK** (command-line tools are enough):
+
+   ```bash
+   mkdir -p ~/android-sdk/cmdline-tools
+   # Download commandlinetools-linux-*.zip from developer.android.com and
+   # unzip it into ~/android-sdk/cmdline-tools/latest, then:
+   yes | sdkmanager --sdk_root=$HOME/android-sdk \
+     "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+   ```
+
 ## Building the APK
 
-Prerequisites: JDK 17 + Android SDK, and an OsmAnd workspace with this
-repo wired as a submodule (`plugins/Osmand-TopoPrintPlugin`) whose
-release build uses `signingConfigs.topo` (already configured in
-`OsmAnd/build.gradle`).
+1. **Clone the OsmAnd workspace with this plugin wired in**:
 
-1. Create a signing key (once):
+   ```bash
+   git clone https://github.com/acui/OsmAnd.git
+   cd OsmAnd
+   git checkout topoprint-5.4.11
+   git submodule update --init --remote plugins/Osmand-TopoPrintPlugin
+   echo "sdk.dir=$HOME/android-sdk" >> local.properties
+   ```
+
+2. Create a signing key (once):
 
    ```bash
    keytool -genkeypair -v -keystore ~/keys/topo_release.keystore \
      -alias topo -keyalg RSA -keysize 2048 -validity 10000
    ```
 
-2. Build (the script prompts for the keystore password; hidden input,
-   never written to disk):
+3. Save this as `build_54_release.sh` in the workspace root (adjust the
+   two paths to your layout):
 
    ```bash
-   bash build_54_release.sh
-   # Output: OsmAnd/build/outputs/apk/androidFullOpenglArm64/release/
-   #         OsmAnd-androidFull-opengl-arm64-release.apk
+   #!/bin/bash
+   # Build the arm64 RELEASE apk of the FREE version (net.osmand),
+   # signing with the Topo keystore.
+   # Prompts for the keystore password in this shell (hidden input,
+   # held in memory only, never written to disk or the build log).
+   cd <OSMAND_WORKSPACE>                     # e.g. ~/projects/OsmAnd
+   read -s -p "Topo keystore password (alias 'topo'): " TOPO_KEY_PASSWORD
+   echo
+   export TOPO_KEY_PASSWORD
+   export JAVA_HOME=$(ls -d <JDK17_HOME>)    # e.g. /usr/lib/jvm/jdk-17
+   ./gradlew :OsmAnd:assembleGplayFreeOpenglArm64Release -x test --no-daemon \
+     > /tmp/gradle_54_free_arm64.log 2>&1
+   unset TOPO_KEY_PASSWORD
+   tail -2 /tmp/gradle_54_free_arm64.log
+   grep -E "^e: |error: " /tmp/gradle_54_free_arm64.log | head -15
+   ls -lh OsmAnd/build/outputs/apk/gplayFreeOpenglArm64/release/*.apk 2>/dev/null
    ```
 
    Under the hood the password is passed to `signingConfigs.topo` via the
@@ -37,11 +73,19 @@ release build uses `signingConfigs.topo` (already configured in
    `~/keys/topo-release-signing.properties` file works too; with neither
    present the build falls back to the debug keystore).
 
-3. Install on a device:
+4. Build (prompts for the keystore password):
 
    ```bash
-   adb install -r OsmAnd/build/outputs/apk/androidFullOpenglArm64/release/\
-   OsmAnd-androidFull-opengl-arm64-release.apk
+   bash build_54_release.sh
+   # Output: OsmAnd/build/outputs/apk/gplayFreeOpenglArm64/release/
+   #         OsmAnd-gplayFree-opengl-arm64-release.apk
+   ```
+
+5. Install on a device:
+
+   ```bash
+   adb install -r OsmAnd/build/outputs/apk/gplayFreeOpenglArm64/release/\
+   OsmAnd-gplayFree-opengl-arm64-release.apk
    ```
 
 > Fast devices handle 600 DPI; on ~3.5 GB RAM devices prefer 300 DPI

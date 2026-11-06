@@ -140,3 +140,10 @@ consumed by the OsmAnd 5.4 workspace as a git submodule
 - [fuji_600dpi_A4_25K_portrait.svg](samples/fuji_600dpi_A4_25K_portrait.svg) —
   self-contained vector version (basemap embedded as base64; opens in a
   browser or Inkscape)
+
+## Known issues
+
+- **Missing text on the left and top of the map** — on small-memory
+  devices the label/icon batches that load last (top/left of the
+  raster) can be dropped when memory pressure slows tile loading.
+  Lowering the print DPI (e.g. 600 → 300) resolves it.

@@ -1,0 +1,20 @@
+diff --git a/OsmAnd/build.gradle b/OsmAnd/build.gradle
+index b57110b745..e86cb75e44 100644
+--- a/OsmAnd/build.gradle
++++ b/OsmAnd/build.gradle
+@@ -81,6 +81,15 @@ android {
+ 	//}
+ 
+ 	sourceSets {
++		// TopoPrint plugin: kept in its own directory (see plugins/Osmand-TopoPrintPlugin/)
++		// and compiled into this module via additional source dirs.
++		main {
++			java.srcDirs += ["../plugins/Osmand-TopoPrintPlugin/src"]
++			res.srcDirs += ["../plugins/Osmand-TopoPrintPlugin/res"]
++		}
++		androidTest {
++			java.srcDirs += ["../plugins/Osmand-TopoPrintPlugin/androidTest/java"]
++		}
+ 		debug {
+ 			manifest.srcFile "AndroidManifest-debug.xml"
+ 		}

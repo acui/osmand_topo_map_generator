@@ -25,6 +25,7 @@ import net.osmand.plus.plugins.topoprint.TopoPrintPlugin;
 import net.osmand.plus.plugins.topoprint.compose.UtmMath;
 import net.osmand.plus.utils.NativeUtilities;
 import net.osmand.plus.views.OsmandMapTileView;
+import net.osmand.plus.views.layers.PointLocationLayer;
 import net.osmand.plus.views.corenative.NativeCoreContext;
 
 import java.util.concurrent.CountDownLatch;
@@ -45,6 +46,15 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	private static final long FRAME_WAIT_TIMEOUT_MS = 300000;
 	private static final long FRAME_POLL_MS = 250;
 	private static final long FRAME_STABLE_MS = 15000;
+	/**
+	 * Settle budget for the calibration rounds and capture-gate retries.
+	 * These waits used to share the single render-start deadline, so once
+	 * the first long settle exhausted it on a renderer that keeps
+	 * invalidating (600 DPI symbol re-layout churn never reports idle), every
+	 * later wait returned instantly and the calibration ran with zero
+	 * settling between rounds. Each phase gets a fresh, bounded budget.
+	 */
+	private static final long PHASE_SETTLE_CAP_MS = 120000;
 	/**
 	 * Residual zoom error the calibration accepts: the measured ground
 	 * coverage must match the requested frame within 0.2% (≈0.4mm on a 175mm
@@ -89,6 +99,9 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	private MapRendererContext printContext;
 	private AtlasMapRendererView offscreenView;
 	private OsmandMapTileView tileView;
+	/** Location layer, captured during the print to detach it from the sensors. */
+	private PointLocationLayer locationLayer;
+	private boolean locationDetached;
 	/**
 	 * True once {@link #offscreenView} completed setupRenderer and got this
 	 * listener attached. MapRendererView.removeListener() synchronizes on its
@@ -230,9 +243,54 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		// the draw pass - only the map and its raster layers belong in the
 		// print.
 		offscreenView.removeAllSymbolsProviders();
+		// …but the layers that own those providers subscribed as frame
+		// listeners during the probe draw (OsmandMapLayer
+		// .onPrepareBufferImage → addListener) and re-register their
+		// providers from the frame callbacks — PointLocationLayer
+		// .onUpdateFrame → setMarkerProvider — so the my-location cone
+		// reappeared in every frame rendered after the strip whenever the
+		// print area covered the current position. Detach the layer
+		// listeners as well; the plugin's own listener is added further
+		// below and survives.
+		for (net.osmand.plus.views.layers.base.OsmandMapLayer layer : tileView.getLayers()) {
+			if (layer instanceof MapRendererViewListener) {
+				offscreenView.removeListener((MapRendererViewListener) layer);
+			}
+			if (layer instanceof PointLocationLayer) {
+				locationLayer = (PointLocationLayer) layer;
+			}
+		}
+		if (locationLayer != null) {
+			// The location layer also subscribes to the sensors directly
+			// (initLayer → locationProvider.addLocationListener/
+			// addCompassListener) — paths the frame-listener detach above
+			// does not cover. Every fix re-positions/animates the marker
+			// and every heading change toggles the view cone's visibility
+			// (the sector appearing and disappearing) — each flip
+			// invalidates the frame, so with live sensors isIdle() never
+			// came true and the settle burned its whole deadline on an
+			// S25 (≈600 frames). Detach the layer from the sensors for
+			// the render; restore() reattaches them.
+			app.getLocationProvider().removeLocationListener(locationLayer);
+			app.getLocationProvider().removeCompassListener(locationLayer);
+			locationDetached = true;
+		}
+		// The my-location circle and its view cone are view state, not
+		// provider symbols — removeAllSymbolsProviders() never removed
+		// them (the probe draw positioned them through
+		// setMyLocationCirclePosition). Zero the radii so they cannot
+		// appear in the raster; with the sensors detached above nothing
+		// sets them back.
+		offscreenView.setMyLocationCircleRadius(0f);
+		offscreenView.setMyLocationSectorRadius(0f);
 		offscreenView.resumeSymbolsUpdate();
 		offscreenView.setSymbolsUpdateInterval(1000);
-		offscreenView.setMaximumFrameRate(30);
+		// Low on purpose: at 600 DPI every frame costs a ~95 MB read-back
+		// (~0.5 s on a flagship). Rendering at 30 fps outpaces the read-back
+		// and the frame-invalidation counter never drains — isIdle() stayed
+		// false for the whole 300 s settle on an S25 (≈600 frames). The print
+		// is a static scene; 5 fps keeps the pipeline drainable.
+		offscreenView.setMaximumFrameRate(5);
 		offscreenView.addListener(this);
 		listenerAttached = true;
 		// Without the frame reader getBitmap() returns the raw GL frame whose
@@ -288,7 +346,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			// the requested one, zoom in by log2(ratio) to shrink it back.
 			adjustZoomOnUiThread(Math.log(ratio) / Math.log(2));
 			frameReady = false;
-			waitForStable(deadline);
+			waitForStable(phaseDeadline());
 			Double check = measureCoverageRatioOnUi();
 			finalRatio = check == null ? Double.NaN : check;
 			Log.i(TAG, "zoom calibration round " + round + " verified ratio=" + check);
@@ -304,7 +362,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				break;
 			}
 			frameReady = false;
-			waitForStable(deadline);
+			waitForStable(phaseDeadline());
 		}
 		// 5. Capture is gated inside captureNow: the renderer has been observed
 		//    to alternate between two camera states (the corrected one and one
@@ -362,8 +420,12 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				(from.getLongitude() - to.getLongitude()) * metersPerDegLon);
 	}
 
+	/** Fresh settle budget for one calibration round or gate retry. */
+	private static long phaseDeadline() {
+		return SystemClock.uptimeMillis() + PHASE_SETTLE_CAP_MS;
+	}
+
 	private void waitForStable(long deadline) {
-		int lastFrameId = -1;
 		int lastReported = -1;
 		long stableSince = 0;
 		String lastReason = null;
@@ -384,16 +446,19 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			// batches that load last (top/left of the raster).
 			long now = SystemClock.uptimeMillis();
 			boolean idle = offscreenView == null || offscreenView.isIdle();
-			boolean active = !idle || frameId != lastFrameId;
+			// Only real pending work resets the quiet window. Frame advances
+			// while the renderer reports idle are cosmetic re-renders of an
+			// already-settled scene (a periodic tick can keep producing one
+			// every ~10 s forever) — counting them as activity never let the
+			// settle complete: on an S25 at 600 DPI isIdle() had been true
+			// for minutes while the wait still ran out its whole deadline.
+			boolean active = !idle;
 			if (active) {
-				if (!idle) {
-					String reason = offscreenView.getNotIdleReason();
-					if (reason != null && !reason.equals(lastReason)) {
-						Log.i(TAG, "not idle: " + reason);
-						lastReason = reason;
-					}
+				String reason = offscreenView.getNotIdleReason();
+				if (reason != null && !reason.equals(lastReason)) {
+					Log.i(TAG, "not idle: " + reason);
+					lastReason = reason;
 				}
-				lastFrameId = frameId;
 				stableSince = now;
 			} else if (now - stableSince >= FRAME_STABLE_MS && now - stableSince > 0) {
 				break;
@@ -574,7 +639,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				// quiet AND the renderer idle) before the next gate, off the
 				// UI thread.
 				Thread waiter = new Thread(() -> {
-					waitForStable(SystemClock.uptimeMillis() + FRAME_WAIT_TIMEOUT_MS);
+					waitForStable(phaseDeadline());
 					app.runInUIThread(() -> captureNow(attempt + 1));
 				}, "TopoPrintGateStabilize");
 				waiter.start();
@@ -780,6 +845,14 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			reattachMainMap();
 		}
 		printContext = null;
+		if (locationDetached && locationLayer != null) {
+			// Sensors were detached for the render (step2) — reattach once
+			// the main map is live again.
+			app.getLocationProvider().addLocationListener(locationLayer);
+			app.getLocationProvider().addCompassListener(locationLayer);
+		}
+		locationLayer = null;
+		locationDetached = false;
 		if (savedContext != null) {
 			// Recreate the global context with the saved density and bind it to
 			// the main view. Note: use the NEW instance — setMapRendererView on

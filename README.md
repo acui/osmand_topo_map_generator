@@ -147,3 +147,8 @@ consumed by the OsmAnd 5.4 workspace as a git submodule
   devices the label/icon batches that load last (top/left of the
   raster) can be dropped when memory pressure slows tile loading.
   Lowering the print DPI (e.g. 600 → 300) resolves it.
+
+## License
+
+This plugin is licensed under the
+[GNU General Public License v3.0](LICENSE).

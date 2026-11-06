@@ -24,7 +24,7 @@
 	<string name="topoprint_progress_gl">Creating the offscreen GL renderer…</string>
 	<string name="topoprint_progress_tiles">Loading map tiles for the print area…</string>
 	<string name="topoprint_progress_tiles_frames">Loading map tiles for the print area… (%1$d frames rendered)</string>
-	<string name="topoprint_progress_wait">Waiting for the map to settle (attempt %1$d of %2$d)…</string>
+	<string name="topoprint_progress_wait">Camera offset detected — re-centering and waiting for the map to settle (attempt %1$d of %2$d)…</string>
 	<string name="topoprint_progress_capture">Frame captured, composing the map…</string>
 	<string name="topoprint_cancelled">Map generation cancelled</string>
 	<string name="topoprint_rendering">Rendering the map with the current style…</string>

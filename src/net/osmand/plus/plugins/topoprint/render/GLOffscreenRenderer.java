@@ -45,7 +45,6 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	private static final long FRAME_WAIT_TIMEOUT_MS = 300000;
 	private static final long FRAME_POLL_MS = 250;
 	private static final long FRAME_STABLE_MS = 15000;
-	private static final long MIN_SOAK_MS = 12000;
 	/**
 	 * Residual zoom error the calibration accepts: the measured ground
 	 * coverage must match the requested frame within 0.2% (≈0.4mm on a 175mm
@@ -396,11 +395,18 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				}
 				lastFrameId = frameId;
 				stableSince = now;
-			} else if (now - stableSince >= FRAME_STABLE_MS && now - stableSince > 0
-					&& now - startUptimeMs >= MIN_SOAK_MS) {
+			} else if (now - stableSince >= FRAME_STABLE_MS && now - stableSince > 0) {
 				break;
 			}
 			SystemClock.sleep(FRAME_POLL_MS);
+		}
+		// Distinguish the normal plateau exit from the deadline fallback: the
+		// gates and calibration read renderer state fine either way, but a
+		// capture after a timeout may carry half-loaded label batches — say
+		// so in the log for field debugging.
+		if (offscreenView != null && !offscreenView.isIdle()) {
+			Log.w(TAG, "waitForStable: deadline hit while not idle ("
+					+ offscreenView.getNotIdleReason() + ") — proceeding with a possibly incomplete map");
 		}
 	}
 

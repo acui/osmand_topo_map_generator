@@ -19,7 +19,7 @@
 	<string name="topoprint_progress_gl">正在创建离屏 GL 渲染器…</string>
 	<string name="topoprint_progress_tiles">正在加载打印区域的地图瓦片…</string>
 	<string name="topoprint_progress_tiles_frames">正在加载打印区域的地图瓦片…（已渲染 %1$d 帧）</string>
-	<string name="topoprint_progress_wait">正在等待地图渲染稳定…（第 %1$d/%2$d 次尝试）</string>
+	<string name="topoprint_progress_wait">检测到画面偏移，正在重新校正并等待渲染稳定…（第 %1$d/%2$d 次尝试）</string>
 	<string name="topoprint_progress_capture">已捕获地图画面，正在合成地图…</string>
 	<string name="topoprint_cancelled">已取消生成</string>
 	<string name="topoprint_rendering">正在使用当前样式渲染地图…</string>

@@ -51,10 +51,15 @@ object SvgToPngRenderer {
 	 * physical print density ([dpi]) into the PNG so print tools keep the
 	 * map at its paper size.
 	 *
+	 * @param cacheDir app-private cache directory for the intermediate
+	 * compressed PNG — never the output dir, whose shared storage rejects
+	 * unknown MIME types (".tmp") with EPERM
+	 *
 	 * @return true on success; throws on invalid input — the caller treats any
 	 * failure as "SVG kept, PNG unavailable"
 	 */
-	fun renderToPng(svgFile: File, widthPx: Int, heightPx: Int, pngFile: File, dpi: Int): Boolean {
+	fun renderToPng(svgFile: File, widthPx: Int, heightPx: Int, pngFile: File, dpi: Int,
+	                cacheDir: File): Boolean {
 		val svg = FileInputStream(svgFile).use { stream -> SVG.getFromInputStream(stream) }
 		val resolver = SiblingImageResolver(svgFile.parentFile)
 		SVG.registerExternalFileResolver(resolver)
@@ -72,10 +77,12 @@ object SvgToPngRenderer {
 				// Compress to a temp file and splice the pHYs chunk while
 				// streaming: holding the whole compressed PNG (and its array
 				// copies) in the heap OOMs on 600 dpi maps — the same reason
-				// embedBasemap() streams its base64.
-				val tmpFile = File(pngFile.parentFile, pngFile.name + ".tmp")
-				FileOutputStream(tmpFile).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+				// embedBasemap() streams its base64. The temp file MUST live
+				// in the app-private cache dir: shared-storage output dirs
+				// reject unknown MIME types (".tmp") with EPERM.
+				val tmpFile = File(cacheDir, pngFile.name + ".tmp")
 				try {
+					FileOutputStream(tmpFile).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 					FileInputStream(tmpFile).use { input ->
 						val ihdrEnd = 8 + (4 + 4 + 13 + 4)   // signature + IHDR chunk
 						val head = ByteArray(ihdrEnd)

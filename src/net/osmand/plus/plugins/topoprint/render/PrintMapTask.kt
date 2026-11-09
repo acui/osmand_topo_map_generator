@@ -180,7 +180,8 @@ class PrintMapTask(
 				return Result(svgFile, File(""))
 			}
 			notifyProgress(app.getString(R.string.topoprint_rasterizing))
-			if (!SvgToPngRenderer.renderToPng(svgFile, paperWidthPx, paperHeightPx, pngFile, params.dpi)) {
+			if (!SvgToPngRenderer.renderToPng(svgFile, paperWidthPx, paperHeightPx, pngFile, params.dpi,
+					app.cacheDir)) {
 				return null
 			}
 			// Rasterization done: embed the basemap as a base64 data URI so the

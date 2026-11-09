@@ -24,12 +24,14 @@ import kotlin.math.sqrt
  *
  * @param raster basemap source; `pngFileName` is the basemap file placed
  *               next to the SVG (embedded as a data URI by the pipeline)
+ * @param attributionLines data-source credit lines (see [MapAttribution])
  */
 class SvgMapComposer(
 	private val geometry: PrintGeometry,
 	private val label: String,
 	private val raster: Raster,
-	private val createdTimeMillis: Long
+	private val createdTimeMillis: Long,
+	private val attributionLines: List<String>
 ) {
 
 	/** Georeferenced basemap raster: true UTM coordinates of its four corners. */
@@ -409,8 +411,13 @@ class SvgMapComposer(
 			0.0, unitY + fontSize * 4.5, fontSize, "start", color = gray))
 		sb.append(text("Map is provided by OsmAnd Maps &amp; Navigation https://osmand.net/",
 			0.0, unitY + fontSize * 6, fontSize, "start", color = gray))
-		sb.append(text("Map data © OpenStreetMap contributors (ODbL); OsmAnd app under GPLv3 https://github.com/osmandapp/OsmAnd/blob/master/LICENSE",
-			0.0, unitY + fontSize * 7.5, fontSize, "start", color = gray))
+		// Data-source credits: reflect what actually contributed to this
+		// render (space-bounded, see MapAttribution); the OsmAnd license
+		// stays the authoritative full list.
+		attributionLines.forEachIndexed { index, line ->
+			sb.append(text(line, 0.0,
+				unitY + fontSize * (7.5 + index * 1.5), fontSize, "start", color = gray))
+		}
 		sb.append("  </g>\n")
 	}
 

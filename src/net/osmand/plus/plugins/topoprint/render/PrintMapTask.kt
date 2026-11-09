@@ -8,6 +8,7 @@ import net.osmand.plus.OsmandApplication
 import net.osmand.plus.R
 import net.osmand.plus.plugins.topoprint.PrintParameters
 import net.osmand.plus.plugins.topoprint.compose.Geomagnetism
+import net.osmand.plus.plugins.topoprint.compose.MapAttribution
 import net.osmand.plus.plugins.topoprint.compose.PrintGeometry
 import net.osmand.plus.plugins.topoprint.compose.SvgMapComposer
 import net.osmand.plus.plugins.topoprint.compose.UtmMath
@@ -164,7 +165,8 @@ class PrintMapTask(
 			if (!saveBasemap(renderResult.bitmap, basemapFile)) {
 				return null
 			}
-			val composer = SvgMapComposer(geometry, label, raster, System.currentTimeMillis())
+			val composer = SvgMapComposer(geometry, label, raster,
+				System.currentTimeMillis(), MapAttribution.buildLines(app))
 			val svgText = composer.compose()
 			log.info("grid-vs-raster residuals: ${composer.gridVsRasterResiduals(sampleKmIntersections(geometry))}")
 			svgFile.writeText(svgText)

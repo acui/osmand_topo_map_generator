@@ -276,7 +276,13 @@ public class TopoPrintPlugin extends OsmandPlugin {
 					@Override
 					public void onOverwriteQuery(@NonNull List<? extends File> existing,
 							@NonNull PrintMapTask.OverwriteDecision decision) {
-						// Delivered on the UI thread
+						// Delivered on the UI thread. If the activity died
+						// during the render, decline and release the task's
+						// latch instead of showing a dialog on a dead token.
+						if (mapActivity.isDestroyed() || mapActivity.isFinishing()) {
+							decision.onDecision(false);
+							return;
+						}
 						StringBuilder names = new StringBuilder();
 						for (File f : existing) {
 							if (names.length() > 0) {
@@ -305,6 +311,12 @@ public class TopoPrintPlugin extends OsmandPlugin {
 					@Override
 					public void onCompleted(@Nullable PrintMapTask.Result result) {
 						progress.dismiss();
+						// The render outlives configuration changes and
+						// backgrounding: showing a dialog on a destroyed
+						// activity's token crashes with BadTokenException.
+						if (mapActivity.isDestroyed() || mapActivity.isFinishing()) {
+							return;
+						}
 						if (result != null) {
 							showResultDialog(mapActivity, params, label, result);
 						} else {

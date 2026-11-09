@@ -409,7 +409,7 @@ class SvgMapComposer(
 			0.0, unitY + fontSize * 4.5, fontSize, "start", color = gray))
 		sb.append(text("Map is provided by OsmAnd Maps &amp; Navigation https://osmand.net/",
 			0.0, unitY + fontSize * 6, fontSize, "start", color = gray))
-		sb.append(text("Licensed under CC BY-NC-ND 2.0 https://github.com/osmandapp/Osmand/blob/master/LICENSE",
+		sb.append(text("Map data © OpenStreetMap contributors (ODbL); OsmAnd app under GPLv3 https://github.com/osmandapp/OsmAnd/blob/master/LICENSE",
 			0.0, unitY + fontSize * 7.5, fontSize, "start", color = gray))
 		sb.append("  </g>\n")
 	}

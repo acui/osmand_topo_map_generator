@@ -10,7 +10,6 @@ import com.caverock.androidsvg.SVG
 import com.caverock.androidsvg.SVGExternalFileResolver
 import net.osmand.PlatformUtil
 import org.apache.commons.logging.Log
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -69,11 +68,34 @@ object SvgToPngRenderer {
 			canvas.drawColor(Color.WHITE)
 			svg.renderToCanvas(canvas)
 
-			FileOutputStream(pngFile).use { out ->
-				val bytes = ByteArrayOutputStream().also {
-					bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-				}.toByteArray()
-				out.write(if (dpi > 0) withPngDpi(bytes, dpi) else bytes)
+			if (dpi > 0) {
+				// Compress to a temp file and splice the pHYs chunk while
+				// streaming: holding the whole compressed PNG (and its array
+				// copies) in the heap OOMs on 600 dpi maps — the same reason
+				// embedBasemap() streams its base64.
+				val tmpFile = File(pngFile.parentFile, pngFile.name + ".tmp")
+				FileOutputStream(tmpFile).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+				try {
+					FileInputStream(tmpFile).use { input ->
+						val ihdrEnd = 8 + (4 + 4 + 13 + 4)   // signature + IHDR chunk
+						val head = ByteArray(ihdrEnd)
+						var off = 0
+						while (off < ihdrEnd) {
+							val n = input.read(head, off, ihdrEnd - off)
+							if (n < 0) throw java.io.IOException("truncated PNG header")
+							off += n
+						}
+						FileOutputStream(pngFile).use { out ->
+							out.write(head)
+							out.write(pngDpiChunk(dpi))
+							input.copyTo(out)
+						}
+					}
+				} finally {
+					tmpFile.delete()
+				}
+			} else {
+				FileOutputStream(pngFile).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 			}
 			return true
 		} finally {
@@ -83,12 +105,13 @@ object SvgToPngRenderer {
 	}
 
 	/**
-	 * Android's PNG encoder writes no pHYs chunk, so viewers and print tools
-	 * assume 72 dpi and the map loses its physical size. Splice a pHYs
-	 * chunk (pixels per metre on both axes) right after the mandatory IHDR
-	 * chunk — the only structural change needed to declare the density.
+	 * Builds the 21-byte pHYs chunk (pixels per metre on both axes). The
+	 * caller splices it right after the mandatory IHDR chunk while streaming —
+	 * the only structural change needed to declare the print density, since
+	 * Android's PNG encoder writes no pHYs chunk and viewers would assume
+	 * 72 dpi.
 	 */
-	private fun withPngDpi(png: ByteArray, dpi: Int): ByteArray {
+	private fun pngDpiChunk(dpi: Int): ByteArray {
 		val ppm = Math.round(dpi / 0.0254f)
 		val chunk = ByteArray(21)
 		writeInt(chunk, 0, 9)                                   // data length
@@ -98,12 +121,7 @@ object SvgToPngRenderer {
 		chunk[16] = 1                                           // unit: metre
 		val crc = CRC32().apply { update(chunk, 4, 13) }.value
 		writeInt(chunk, 17, crc.toInt())
-		val ihdrEnd = 8 + (4 + 4 + 13 + 4)                      // signature + IHDR chunk
-		val out = ByteArray(png.size + chunk.size)
-		System.arraycopy(png, 0, out, 0, ihdrEnd)
-		System.arraycopy(chunk, 0, out, ihdrEnd, chunk.size)
-		System.arraycopy(png, ihdrEnd, out, ihdrEnd + chunk.size, png.size - ihdrEnd)
-		return out
+		return chunk
 	}
 
 	private fun writeInt(target: ByteArray, offset: Int, value: Int) {
@@ -113,10 +131,19 @@ object SvgToPngRenderer {
 		target[offset + 3] = value.toByte()
 	}
 
-	/** ARGB bitmap budget check shared by render and rasterization steps. */
+	/**
+	 * ARGB bitmap budget check shared by render and rasterization steps.
+	 * Mirrors OffscreenMapRenderer.isBitmapSizeAllowed: on API 26+ bitmap
+	 * pixels live in the native heap, so budget against the large heap and
+	 * really available RAM instead of the plain memoryClass.
+	 */
 	fun fitsMemoryBudget(context: Context, widthPx: Int, heightPx: Int): Boolean {
 		val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return true
-		val maxBytes = am.memoryClass * 1024L * 1024L * 7 / 10
-		return widthPx.toLong() * heightPx * 4 <= maxBytes
+		val bytes = widthPx.toLong() * heightPx * 4
+		val heapBudget = am.largeMemoryClass * 1024L * 1024L * 7 / 10
+		val info = ActivityManager.MemoryInfo()
+		am.getMemoryInfo(info)
+		val memBudget = (info.availMem * 0.5).toLong().coerceAtLeast(512L * 1024 * 1024)
+		return bytes <= heapBudget && bytes <= memBudget
 	}
 }

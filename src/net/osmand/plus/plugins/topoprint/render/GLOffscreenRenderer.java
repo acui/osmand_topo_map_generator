@@ -156,7 +156,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				+ " coverageMeters=" + widthMeters + "x" + heightMeters
 				+ " spherical=" + spherical + " center=" + center);
 		if (!OffscreenMapRenderer.isBitmapSizeAllowed(app, rasterWidthPx(), rasterHeightPx())) {
-			finish(null, 0, 0);
+			finish();
 			return;
 		}
 		// Same handover pattern as the Android Auto SurfaceRenderer: unbind the
@@ -218,7 +218,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			} catch (OutOfMemoryError e2) {
 				Log.e(TAG, "setupRenderer OOM after retry — bitmap " + rasterWidthPx() + "x"
 						+ rasterHeightPx() + " does not fit the heap", e2);
-				finish(null, 0, 0);
+				finish();
 				return;
 			}
 		}
@@ -603,17 +603,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		reportProgress(R.string.topoprint_progress_wait, attempt + 1, CAPTURE_RETRIES + 1);
 		int w = rasterWidthPx();
 		int h = rasterHeightPx();
-		double bestDrift = Double.MAX_VALUE;
-		for (int i = 0; i < DRIFT_SAMPLES; i++) {
-			LatLon sample = NativeUtilities.getLatLonFromPixel(offscreenView, null, w / 2, h / 2);
-			if (sample != null) {
-				bestDrift = Math.min(bestDrift, distanceMeters(sample, center));
-			}
-			if (bestDrift <= centerToleranceMeters()) {
-				break;
-			}
-			SystemClock.sleep(DRIFT_SAMPLE_INTERVAL_MS);
-		}
+		double bestDrift = sampleBestDriftOffUi(w, h);
 		Log.i(TAG, "capture gate " + attempt + ": bestDrift=" + bestDrift + " m (" + DRIFT_SAMPLES + " samples)");
 		if (bestDrift > centerToleranceMeters() && attempt < CAPTURE_RETRIES) {
 			if (bestDrift != Double.MAX_VALUE) {
@@ -703,6 +693,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 						+ " zoom=" + offscreenView.getZoom()
 						+ " corners: tl=" + tl + " tr=" + tr + " br=" + br + " bl=" + bl
 						+ String.format(" postCaptureDeltaM=%.1f", sameStateDeltaM));
+				delivered = true;
 				restore();
 				reportProgress(R.string.topoprint_progress_capture);
 				listener.onRendered(new OffscreenMapRenderer.RenderResult(bitmap, georef));
@@ -717,6 +708,40 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 				+ " attempts — failing instead of delivering a mis-georeferenced map");
 		restore();
 		listener.onRendered(null);
+	}
+
+	/**
+	 * Runs the drift sampling on a worker thread: the native raycasts and the
+	 * inter-sample sleeps must not block the UI thread (captureNow runs on
+	 * main). Bounded join — a timed-out sampler keeps filling best[0] in the
+	 * background, which is harmless: the caller only reads a possibly stale
+	 * value and the gate re-verifies on the next attempt.
+	 */
+	private double sampleBestDriftOffUi(int w, int h) {
+		final MapRendererView view = offscreenView;
+		if (view == null) {
+			return Double.MAX_VALUE;
+		}
+		final double[] best = {Double.MAX_VALUE};
+		Thread sampler = new Thread(() -> {
+			for (int i = 0; i < DRIFT_SAMPLES; i++) {
+				LatLon sample = NativeUtilities.getLatLonFromPixel(view, null, w / 2, h / 2);
+				if (sample != null) {
+					best[0] = Math.min(best[0], distanceMeters(sample, center));
+				}
+				if (best[0] <= centerToleranceMeters()) {
+					break;
+				}
+				SystemClock.sleep(DRIFT_SAMPLE_INTERVAL_MS);
+			}
+		}, "TopoPrintGateSample");
+		sampler.start();
+		try {
+			sampler.join(10000);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		return best[0];
 	}
 
 	/**
@@ -781,14 +806,14 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		return (int) Math.ceil(heightMeters / OffscreenMapRenderer.groundMetersPerPixel(params));
 	}
 
-	private void finish(@Nullable Bitmap bitmap, int widthPx, int heightPx) {
+	/** Fails the render: restores the app state and delivers a null result. */
+	private void finish() {
 		if (delivered) return;
 		delivered = true;
-		Log.w(TAG, "finish(): bitmap=" + (bitmap != null));
+		Log.w(TAG, "finish(): failed");
 		mainHandler.removeCallbacksAndMessages(null);
 		restore();
-		listener.onRendered(bitmap == null ? null
-				: new OffscreenMapRenderer.RenderResult(bitmap, null));
+		listener.onRendered(null);
 	}
 
 	private void restore() {

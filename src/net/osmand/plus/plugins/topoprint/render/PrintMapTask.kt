@@ -22,6 +22,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * End-to-end map pipeline: geometry → declination → offscreen render with
@@ -111,8 +112,11 @@ class PrintMapTask(
 					}
 				})
 			}
-			latch.await()
-			if (!overwrite) {
+			// Bounded wait: if the decision callback is lost (e.g. the
+			// activity was destroyed before the dialog could show), an
+			// indefinite await would hang the whole modal pipeline forever.
+			val decided = latch.await(5, TimeUnit.MINUTES)
+			if (!decided || !overwrite) {
 				app.runInUIThread { listener.onCancelled() }
 				return
 			}

@@ -117,6 +117,10 @@ public class PrintExportHelper {
 
 			Bitmap bitmap = decodeBitmap(file);
 			if (bitmap == null) {
+				// Release the started page and the native document before
+				// bailing out — the finally block below only covers writeTo.
+				document.finishPage(page);
+				document.close();
 				callback.onWriteFailed("Cannot decode " + file.getName());
 				return;
 			}

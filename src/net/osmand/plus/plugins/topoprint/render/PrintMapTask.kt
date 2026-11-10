@@ -69,6 +69,19 @@ class PrintMapTask(
 	private val renderer = OffscreenMapRenderer(app)
 	private val log: Log = PlatformUtil.getLog(PrintMapTask::class.java)
 
+	@Volatile
+	private var cancelled = false
+
+	/**
+	 * Requests cancellation: the render aborts at the next stage boundary and
+	 * [Listener.onCancelled] is delivered instead of [Listener.onCompleted].
+	 * Safe to call from any thread, idempotent.
+	 */
+	fun cancel() {
+		cancelled = true
+		renderer.cancel()
+	}
+
 	fun run() {
 		// A user-configured directory may be unwritable (scoped storage);
 		// fall back to the app-private topoprint folder instead of failing.
@@ -123,15 +136,36 @@ class PrintMapTask(
 			}
 		}
 
+		if (cancelled) {
+			app.runInUIThread { listener.onCancelled() }
+			return
+		}
+
 		renderer.render(params, center,
 			geometry.rotatedCoverageWidthMeters, geometry.rotatedCoverageHeightMeters,
 			{ message -> notifyProgress(message) }) { renderResult ->
+			if (cancelled) {
+				// The user cancelled while the render was running: discard the
+				// result and report cancellation instead of failure.
+				renderResult?.bitmap?.recycle()
+				app.runInUIThread { listener.onCancelled() }
+				return@render
+			}
 			if (renderResult == null) {
 				complete(null)
 				return@render
 			}
 			notifyProgress(app.getString(R.string.topoprint_progress_capture))
-			Thread { complete(compose(geometry, renderResult, svgFile, basemapFile, pngFile)) }.start()
+			Thread {
+				val result = compose(geometry, renderResult, svgFile, basemapFile, pngFile)
+				// Cancellation during composition: the (complete) artifacts
+				// stay on disk, but the task reports cancelled, not done.
+				if (cancelled) {
+					app.runInUIThread { listener.onCancelled() }
+				} else {
+					complete(result)
+				}
+			}.start()
 		}
 	}
 

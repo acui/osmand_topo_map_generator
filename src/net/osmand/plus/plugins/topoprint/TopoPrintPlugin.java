@@ -257,12 +257,30 @@ public class TopoPrintPlugin extends OsmandPlugin {
 
 		// Modal progress dialog: the map is frozen while the offscreen render
 		// owns the shared EGL renderer, so user interaction must be locked out.
+		// Cancelling (button or back) aborts the render at the next stage
+		// boundary and restores the map.
+		final PrintMapTask[] taskHolder = new PrintMapTask[1];
 		AlertDialog progress = new AlertDialog.Builder(UiUtilities.getThemedContext(mapActivity,
 				app.getDaynightHelper().isNightMode(ThemeUsageContext.OVER_MAP)))
 				.setTitle(R.string.topoprint_plugin_name)
 				.setMessage(R.string.topoprint_rendering)
-				.setCancelable(false)
+				.setCancelable(true)
+				.setOnCancelListener(dialog -> {
+					PrintMapTask task = taskHolder[0];
+					if (task != null) {
+						task.cancel();
+					}
+				})
 				.create();
+		// Dialog method — the androidx Builder has no such fluent setter.
+		progress.setCanceledOnTouchOutside(false);
+		progress.setButton(AlertDialog.BUTTON_NEGATIVE, app.getString(R.string.shared_string_cancel),
+				(dialog, which) -> {
+					PrintMapTask task = taskHolder[0];
+					if (task != null) {
+						task.cancel();
+					}
+				});
 		progress.show();
 
 		PrintMapTask task = new PrintMapTask(app, params, center, label, outputDir,

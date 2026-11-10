@@ -30,6 +30,7 @@ import net.osmand.plus.views.corenative.NativeCoreContext;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 /**
  * Renders the print basemap through the OpenGL engine, rebinding the global
@@ -91,6 +92,9 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	@Nullable
 	private final OffscreenMapRenderer.ProgressListener progress;
 	private final OffscreenMapRenderer.RenderListener listener;
+	/** Cancellation probe — polled at every stage boundary and in all wait loops. */
+	@NonNull
+	private final BooleanSupplier cancelled;
 	private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
 	private MapRendererContext savedContext;
@@ -118,7 +122,8 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	public GLOffscreenRenderer(@NonNull OsmandApplication app, @NonNull PrintParameters params,
 	                           @NonNull LatLon center, double widthMeters, double heightMeters,
 	                           boolean spherical, @Nullable OffscreenMapRenderer.ProgressListener progress,
-	                           @NonNull OffscreenMapRenderer.RenderListener listener) {
+	                           @NonNull OffscreenMapRenderer.RenderListener listener,
+	                           @NonNull BooleanSupplier cancelled) {
 		this.app = app;
 		this.params = params;
 		this.center = center;
@@ -127,6 +132,11 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		this.spherical = spherical;
 		this.progress = progress;
 		this.listener = listener;
+		this.cancelled = cancelled;
+	}
+
+	private boolean isCancelled() {
+		return cancelled.getAsBoolean();
 	}
 
 	public void start() {
@@ -145,6 +155,10 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 
 	private void step1CreateContext() {
 		if (delivered) return;
+		if (isCancelled()) {
+			finish();
+			return;
+		}
 		// Previous renders leave strings, buffers and cached objects behind;
 		// collect them before the big allocations of this render.
 		System.gc();
@@ -199,6 +213,10 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 
 	private void step2SetupRenderer() {
 		if (delivered) return;
+		if (isCancelled()) {
+			finish();
+			return;
+		}
 		reportProgress(R.string.topoprint_progress_gl);
 		offscreenView = new AtlasMapRendererView(app);
 		printContext.presetMapRendererOptions(offscreenView, false);
@@ -301,7 +319,12 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	}
 
 	private void step3ConfigureTarget() {
-		if (delivered || offscreenView == null) return;
+		if (delivered) return;
+		if (isCancelled()) {
+			finish();
+			return;
+		}
+		if (offscreenView == null) return;
 		// Style-anchor fractional zoom (300 dpi reference, identical to the
 		// EyePiece CLI). The render-DPI formula (groundMetersPerPixel) reads
 		// one level higher at 600 dpi; combined with round-to-nearest that
@@ -329,6 +352,10 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		// 2. Map tiles load asynchronously — wait until the frame id stops
 		//    advancing (data settled), with a minimum soak time.
 		waitForStable(deadline);
+		if (isCancelled()) {
+			finish();
+			return;
+		}
 		// 3. Calibrate the zoom against the *actual* on-screen coverage: the
 		//    renderer's zoom semantics differ between Mercator and spherical
 		//    projections, so instead of trusting the formula, measure the
@@ -347,6 +374,10 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			adjustZoomOnUiThread(Math.log(ratio) / Math.log(2));
 			frameReady = false;
 			waitForStable(phaseDeadline());
+			if (isCancelled()) {
+				finish();
+				return;
+			}
 			Double check = measureCoverageRatioOnUi();
 			finalRatio = check == null ? Double.NaN : check;
 			Log.i(TAG, "zoom calibration round " + round + " verified ratio=" + check);
@@ -363,6 +394,10 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			}
 			frameReady = false;
 			waitForStable(phaseDeadline());
+			if (isCancelled()) {
+				finish();
+				return;
+			}
 		}
 		// 5. Capture is gated inside captureNow: the renderer has been observed
 		//    to alternate between two camera states (the corrected one and one
@@ -429,7 +464,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		int lastReported = -1;
 		long stableSince = 0;
 		String lastReason = null;
-		while (SystemClock.uptimeMillis() < deadline) {
+		while (!isCancelled() && SystemClock.uptimeMillis() < deadline) {
 			int frameId = offscreenView != null ? offscreenView.getFrameId() : -1;
 			// The renderer exposes no tile-count total; the monotonic frame
 			// id (advancing as loaded data arrives) is the progress signal.
@@ -599,7 +634,12 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 	 *   line against the map features.
 	 */
 	private void captureNow(int attempt) {
-		if (delivered || offscreenView == null) return;
+		if (delivered) return;
+		if (isCancelled()) {
+			finish();
+			return;
+		}
+		if (offscreenView == null) return;
 		reportProgress(R.string.topoprint_progress_wait, attempt + 1, CAPTURE_RETRIES + 1);
 		int w = rasterWidthPx();
 		int h = rasterHeightPx();
@@ -724,7 +764,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		}
 		final double[] best = {Double.MAX_VALUE};
 		Thread sampler = new Thread(() -> {
-			for (int i = 0; i < DRIFT_SAMPLES; i++) {
+			for (int i = 0; i < DRIFT_SAMPLES && !isCancelled(); i++) {
 				LatLon sample = NativeUtilities.getLatLonFromPixel(view, null, w / 2, h / 2);
 				if (sample != null) {
 					best[0] = Math.min(best[0], distanceMeters(sample, center));

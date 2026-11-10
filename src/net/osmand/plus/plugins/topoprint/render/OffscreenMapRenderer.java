@@ -54,9 +54,24 @@ public class OffscreenMapRenderer {
 	public static final double MAX_RENDER_DPI = 600.0;
 
 	private final OsmandApplication app;
+	/** Set by {@link #cancel()}; polled by the render pipeline at stage boundaries. */
+	private volatile boolean cancelled;
 
 	public OffscreenMapRenderer(@NonNull OsmandApplication app) {
 		this.app = app;
+	}
+
+	/**
+	 * Requests cancellation: the render aborts at the next stage boundary and
+	 * delivers a null result — the caller turns that into onCancelled. Safe
+	 * from any thread, idempotent.
+	 */
+	public void cancel() {
+		cancelled = true;
+	}
+
+	public boolean isCancelled() {
+		return cancelled;
 	}
 
 	/** Geographic coverage of the rendered raster: true lat/lon of its corners. */
@@ -120,10 +135,14 @@ public class OffscreenMapRenderer {
 	                   double widthMeters, double heightMeters,
 	                   @Nullable ProgressListener progress, @NonNull RenderListener listener) {
 		boolean spherical = params.getProjection() == MapProjection.SPHERICAL;
+		if (cancelled) {
+			app.runInUIThread(() -> listener.onRendered(null));
+			return;
+		}
 		if (app.useOpenGlRenderer() && NativeCoreContext.getMapRendererContext() != null) {
 			// The whole GL lifecycle runs on the dedicated TopoPrintGL thread.
 			GLOffscreenRenderer glRenderer = new GLOffscreenRenderer(app, params, center,
-					widthMeters, heightMeters, spherical, progress, listener);
+					widthMeters, heightMeters, spherical, progress, listener, this::isCancelled);
 			glRenderer.start();
 			return;
 		}

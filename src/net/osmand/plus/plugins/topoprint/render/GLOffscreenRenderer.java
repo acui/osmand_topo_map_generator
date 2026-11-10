@@ -353,7 +353,9 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 		//    advancing (data settled), with a minimum soak time.
 		waitForStable(deadline);
 		if (isCancelled()) {
-			finish();
+			// finish()/restore() must run on the main thread (view lifecycle
+			// calls); this is the worker thread.
+			app.runInUIThread(this::finish);
 			return;
 		}
 		// 3. Calibrate the zoom against the *actual* on-screen coverage: the
@@ -375,7 +377,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			frameReady = false;
 			waitForStable(phaseDeadline());
 			if (isCancelled()) {
-				finish();
+				app.runInUIThread(this::finish);
 				return;
 			}
 			Double check = measureCoverageRatioOnUi();
@@ -395,7 +397,7 @@ public class GLOffscreenRenderer implements MapRendererViewListener {
 			frameReady = false;
 			waitForStable(phaseDeadline());
 			if (isCancelled()) {
-				finish();
+				app.runInUIThread(this::finish);
 				return;
 			}
 		}
